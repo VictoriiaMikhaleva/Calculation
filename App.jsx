@@ -876,7 +876,11 @@ export default function App() {
                           </td>
                           <td className="p-3">
                             <div className="flex items-center gap-3">
-                              <MemberAvatar name={getMemberName(item.memberId)} size="sm" />
+                            <MemberAvatar
+  name={getMemberName(item.memberId)}
+  photo={getMemberPhoto(item.memberId)}
+  size="sm"
+/>
                               <span>{getMemberName(item.memberId)}</span>
                             </div>
                           </td>

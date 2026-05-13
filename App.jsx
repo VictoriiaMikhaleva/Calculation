@@ -38,13 +38,13 @@ import {
 } from "lucide-react";
 
 const FAMILY_MEMBERS = [
-  { id: "alisa", name: "Алиса", photo: "/assets/Алиса1.JPG" },
-  { id: "alina", name: "Алина", photo: "/assets/Алина.png" },
-  { id: "grisha", name: "Гриша", photo: "/assets/ГришА.png" },
-  { id: "vika", name: "Вика", photo: "/assets/Вика.png" },
+  { id: "alisa", name: "Алиса" },
+  { id: "alina", name: "Алина" },
+  { id: "grisha", name: "Гриша" },
+  { id: "vika", name: "Вика" },
 ];
 
-const MEMBER_OPTIONS = [{ id: "all", name: "Все", photo: null }, ...FAMILY_MEMBERS];
+const MEMBER_OPTIONS = [{ id: "all", name: "Все" }, ...FAMILY_MEMBERS];
 
 const EXPENSE_CATEGORIES = [
   "Еда",
@@ -137,10 +137,6 @@ function getMemberById(memberId) {
 
 function getMemberName(memberId) {
   return getMemberById(memberId).name;
-}
-
-function getMemberPhoto(memberId) {
-  return getMemberById(memberId).photo;
 }
 
 function getCategoryLabel(item) {
@@ -600,7 +596,7 @@ export default function App() {
                   className="rounded-2xl border border-white/10 bg-slate-900/70 p-4 text-left transition hover:-translate-y-1 hover:bg-slate-900"
                 >
                   <div className="flex items-center gap-4">
-                    <img src={member.photo} alt={member.name} className="h-20 w-20 rounded-full object-cover ring-2 ring-white/10" />
+                    <MemberAvatar name={member.name} size="lg" />
                     <div>
                       <div className="text-xl font-bold">{member.name}</div>
                       <div className="mt-1 text-sm text-green-400">+ {currency.format(income)}</div>
@@ -665,11 +661,7 @@ export default function App() {
 
               <div className="mb-4 rounded-2xl border border-white/10 bg-slate-900/70 p-3">
                 <div className="flex items-center gap-3">
-                  {selectedMemberPreview.photo ? (
-                    <img src={selectedMemberPreview.photo} alt={selectedMemberPreview.name} className="h-12 w-12 rounded-full object-cover" />
-                  ) : (
-                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white/10"><Users size={18} /></div>
-                  )}
+                  <MemberAvatar name={selectedMemberPreview.name} size="md" />
                   <div>
                     <div className="text-sm text-slate-400">Выбрано</div>
                     <div className="font-semibold">{selectedMemberPreview.name}</div>
@@ -875,11 +867,7 @@ export default function App() {
                           </td>
                           <td className="p-3">
                             <div className="flex items-center gap-3">
-                              {getMemberPhoto(item.memberId) ? (
-                                <img src={getMemberPhoto(item.memberId)} alt={getMemberName(item.memberId)} className="h-8 w-8 rounded-full object-cover" />
-                              ) : (
-                                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10"><Users size={14} /></div>
-                              )}
+                              <MemberAvatar name={getMemberName(item.memberId)} size="sm" />
                               <span>{getMemberName(item.memberId)}</span>
                             </div>
                           </td>
@@ -1018,4 +1006,23 @@ function ChartCard({ title, children }) {
 
 function EmptyState({ text }) {
   return <div className="flex min-h-[160px] items-center justify-center p-6 text-center text-slate-400">{text}</div>;
+}
+
+function MemberAvatar({ name, size = "md" }) {
+  const initial = String(name || "?").trim().slice(0, 1).toUpperCase();
+  const box =
+    size === "lg"
+      ? "h-20 w-20 text-2xl"
+      : size === "sm"
+        ? "h-8 w-8 text-xs"
+        : "h-12 w-12 text-base";
+
+  return (
+    <div
+      className={`flex shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-sky-600/45 to-violet-700/45 font-bold text-white ring-2 ring-white/10 ${box}`}
+      aria-hidden
+    >
+      {initial}
+    </div>
+  );
 }

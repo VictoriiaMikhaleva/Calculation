@@ -36,15 +36,18 @@ import {
   RotateCcw,
   Save,
 } from "lucide-react";
-
+import alinaPhoto from "./Алина.png";
+import alisaPhoto from "./Алиса1.JPG";
+import vikaPhoto from "./Вика.png";
+import grishaPhoto from "./ГришА.png";
 const FAMILY_MEMBERS = [
-  { id: "alisa", name: "Алиса" },
-  { id: "alina", name: "Алина" },
-  { id: "grisha", name: "Гриша" },
-  { id: "vika", name: "Вика" },
+  { id: "alisa", name: "Алиса", photo: alisaPhoto },
+  { id: "alina", name: "Алина", photo: alinaPhoto },
+  { id: "grisha", name: "Гриша", photo: grishaPhoto },
+  { id: "vika", name: "Вика", photo: vikaPhoto },
 ];
 
-const MEMBER_OPTIONS = [{ id: "all", name: "Все" }, ...FAMILY_MEMBERS];
+const MEMBER_OPTIONS = [{ id: "all", name: "Все", photo: null }, ...FAMILY_MEMBERS];
 
 const EXPENSE_CATEGORIES = [
   "Еда",

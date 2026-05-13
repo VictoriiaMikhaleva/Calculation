@@ -683,34 +683,27 @@
     });
 
     var memberCards = "";
-FAMILY_MEMBERS.forEach(function (member) {
-  var income = sumAmounts(state.transactions, function (i) {
-    return i.memberId === member.id && i.type === "income";
-  });
-  var expense = sumAmounts(state.transactions, function (i) {
-    return i.memberId === member.id && i.type === "expense";
-  });
-
-  memberCards +=
-    '<button type="button" class="mem-btn" data-filter-member="' +
-    escapeHtml(member.id) +
-    '">' +
-    '<div class="mem-row">' +
-    memberAvatarHtml(member.id) +
-    "<div>" +
-    '<div style="font-size:1.25rem;font-weight:800">' +
-    escapeHtml(member.name) +
-    '</div>' +
-    '<div class="inc">+ ' +
-    escapeHtml(currency.format(income)) +
-    '</div>' +
-    '<div class="exp">− ' +
-    escapeHtml(currency.format(expense)) +
-    "</div>" +
-    "</div>" +
-    "</div>" +
-    "</button>";
-});
+    FAMILY_MEMBERS.forEach(function (member) {
+      var income = sumAmounts(state.transactions, function (i) {
+        return i.memberId === member.id && i.type === "income";
+      });
+      var expense = sumAmounts(state.transactions, function (i) {
+        return i.memberId === member.id && i.type === "expense";
+      });
+      memberCards +=
+        '<button type="button" class="mem-btn" data-filter-member="' +
+        escapeHtml(member.id) +
+        '">' +
+        '<div class="mem-row">' +
+        memberAvatarHtml(member.id, "") +
+        '<div><div style="font-size:1.25rem;font-weight:800">' +
+        escapeHtml(member.name) +
+        '</div><div class="inc">+ ' +
+        escapeHtml(currency.format(income)) +
+        '</div><div class="exp">− ' +
+        escapeHtml(currency.format(expense)) +
+        "</div></div></div></button>";
+    });
 
     var catsOptions = (state.form.type === "expense" ? EXPENSE_CATEGORIES : INCOME_CATEGORIES)
       .map(function (c) {

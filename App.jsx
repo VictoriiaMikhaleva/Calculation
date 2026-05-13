@@ -666,7 +666,11 @@ export default function App() {
 
               <div className="mb-4 rounded-2xl border border-white/10 bg-slate-900/70 p-3">
                 <div className="flex items-center gap-3">
-                  <MemberAvatar name={selectedMemberPreview.name} size="md" />
+            <MemberAvatar
+  name={selectedMemberPreview.name}
+  photo={selectedMemberPreview.photo}
+  size="md"
+/>
                   <div>
                     <div className="text-sm text-slate-400">Выбрано</div>
                     <div className="font-semibold">{selectedMemberPreview.name}</div>

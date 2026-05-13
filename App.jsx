@@ -37,16 +37,11 @@ import {
   Save,
 } from "lucide-react";
 
-import vikaPhoto from "./assets/Вика.png";
-import grishaPhoto from "./assets/ГришА.png";
-import alisaPhoto from "./assets/Алиса1.JPG";
-import alinaPhoto from "./assets/Алина.png";
-
 const FAMILY_MEMBERS = [
-  { id: "alisa", name: "Алиса", photo: alisaPhoto },
-  { id: "alina", name: "Алина", photo: alinaPhoto },
-  { id: "grisha", name: "Гриша", photo: grishaPhoto },
-  { id: "vika", name: "Вика", photo: vikaPhoto },
+  { id: "alisa", name: "Алиса", photo: "/assets/Алиса1.JPG" },
+  { id: "alina", name: "Алина", photo: "/assets/Алина.png" },
+  { id: "grisha", name: "Гриша", photo: "/assets/ГришА.png" },
+  { id: "vika", name: "Вика", photo: "/assets/Вика.png" },
 ];
 
 const MEMBER_OPTIONS = [{ id: "all", name: "Все", photo: null }, ...FAMILY_MEMBERS];

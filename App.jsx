@@ -141,7 +141,9 @@ function getMemberById(memberId) {
 function getMemberName(memberId) {
   return getMemberById(memberId).name;
 }
-
+function getMemberPhoto(memberId) {
+  return getMemberById(memberId).photo;
+}
 function getCategoryLabel(item) {
   if (item.category === "Своя статья") return item.customCategory?.trim() || "Своя статья";
   return item.category;
@@ -1011,14 +1013,25 @@ function EmptyState({ text }) {
   return <div className="flex min-h-[160px] items-center justify-center p-6 text-center text-slate-400">{text}</div>;
 }
 
-function MemberAvatar({ name, size = "md" }) {
+function MemberAvatar({ name, photo, size = "md" }) {
   const initial = String(name || "?").trim().slice(0, 1).toUpperCase();
+
   const box =
     size === "lg"
       ? "h-20 w-20 text-2xl"
       : size === "sm"
         ? "h-8 w-8 text-xs"
         : "h-12 w-12 text-base";
+
+  if (photo) {
+    return (
+      <img
+        src={photo}
+        alt={name}
+        className={`shrink-0 rounded-full object-cover ring-2 ring-white/10 ${box}`}
+      />
+    );
+  }
 
   return (
     <div

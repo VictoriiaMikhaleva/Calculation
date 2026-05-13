@@ -601,7 +601,7 @@ export default function App() {
                   className="rounded-2xl border border-white/10 bg-slate-900/70 p-4 text-left transition hover:-translate-y-1 hover:bg-slate-900"
                 >
                   <div className="flex items-center gap-4">
-                    <MemberAvatar name={member.name} size="lg" />
+                    <MemberAvatar name={member.name} photo={member.photo} size="lg" />
                     <div>
                       <div className="text-xl font-bold">{member.name}</div>
                       <div className="mt-1 text-sm text-green-400">+ {currency.format(income)}</div>

@@ -415,13 +415,20 @@ function saveCurrentBudgetToCloud(nextTransactions = transactions, nextLimits = 
       note: form.note.trim(),
     };
 
-    if (editingId) {
-      setTransactions((prev) => prev.map((item) => (item.id === editingId ? prepared : item)));
-    } else {
-      setTransactions((prev) => [prepared, ...prev]);
-    }
+    let nextTransactions;
 
-    resetForm(form.type);
+if (editingId) {
+  nextTransactions = transactions.map((item) =>
+    item.id === editingId ? prepared : item
+  );
+} else {
+  nextTransactions = [prepared, ...transactions];
+}
+
+setTransactions(nextTransactions);
+saveCurrentBudgetToCloud(nextTransactions, limits);
+
+resetForm(form.type);
   }
 
   function handleEdit(item) {

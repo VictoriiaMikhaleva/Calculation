@@ -33,7 +33,6 @@ import {
   Wallet,
   X,
   Pencil,
-  RotateCcw,
   Save,
 } from "lucide-react";
 import alinaPhoto from "./Алина.png";
@@ -82,19 +81,20 @@ const INCOME_CATEGORIES = [
 ];
 
 const DEFAULT_LIMITS = {
-  "Еда": 60000,
-  "Вещи": 30000,
-  "Кафе": 20000,
-  "Развлечения": 25000,
-  "Транспорт": 15000,
-  "Дом": 50000,
-  "Здоровье": 20000,
-  "Образование": 25000,
-  "Подарки": 15000,
-  "Путешествия": 40000,
-  "Связь": 10000,
-  "Красота": 15000,
-  "Другое": 15000,
+  "Еда": 0,
+  "Вещи": 0,
+  "Кафе": 0,
+  "Развлечения": 0,
+  "Транспорт": 0,
+  "Дом": 0,
+  "Здоровье": 0,
+  "Образование": 0,
+  "Подарки": 0,
+  "Путешествия": 0,
+  "Связь": 0,
+  "Красота": 0,
+  "Другое": 0,
+  "Своя статья": 0,
 };
 
 const PIE_COLORS = [
@@ -161,112 +161,19 @@ function sumAmounts(items, condition) {
   return items.reduce((sum, item) => (condition(item) ? sum + Number(item.amount || 0) : sum), 0);
 }
 
-const demoTransactions = [
-  {
-    id: createId(),
-    type: "income",
-    memberId: "vika",
-    category: "Зарплата",
-    customCategory: "",
-    amount: 240000,
-    date: "2026-05-01",
-    note: "Основной доход",
-  },
-  {
-    id: createId(),
-    type: "income",
-    memberId: "grisha",
-    category: "Подработка",
-    customCategory: "",
-    amount: 95000,
-    date: "2026-05-03",
-    note: "Проект",
-  },
-  {
-    id: createId(),
-    type: "expense",
-    memberId: "all",
-    category: "Еда",
-    customCategory: "",
-    amount: 48000,
-    date: "2026-05-05",
-    note: "Продукты на неделю",
-  },
-  {
-    id: createId(),
-    type: "expense",
-    memberId: "alisa",
-    category: "Развлечения",
-    customCategory: "",
-    amount: 8200,
-    date: "2026-05-07",
-    note: "Парк и аттракционы",
-  },
-  {
-    id: createId(),
-    type: "expense",
-    memberId: "alina",
-    category: "Вещи",
-    customCategory: "",
-    amount: 12600,
-    date: "2026-05-09",
-    note: "Одежда",
-  },
-  {
-    id: createId(),
-    type: "expense",
-    memberId: "all",
-    category: "Кафе",
-    customCategory: "",
-    amount: 15400,
-    date: "2026-05-11",
-    note: "Семейный ужин",
-  },
-  {
-    id: createId(),
-    type: "expense",
-    memberId: "vika",
-    category: "Красота",
-    customCategory: "",
-    amount: 7400,
-    date: "2026-04-20",
-    note: "Уход",
-  },
-  {
-    id: createId(),
-    type: "expense",
-    memberId: "grisha",
-    category: "Транспорт",
-    customCategory: "",
-    amount: 9500,
-    date: "2026-04-18",
-    note: "Такси и бензин",
-  },
-  {
-    id: createId(),
-    type: "income",
-    memberId: "vika",
-    category: "Премия",
-    customCategory: "",
-    amount: 50000,
-    date: "2026-04-10",
-    note: "Премия",
-  },
-];
-
 export default function App() {
     const cloudLoadedRef = useRef(false);
   const applyingCloudRef = useRef(false);
   console.log("App запустился, Firebase должен подключиться");
   const [transactions, setTransactions] = useState(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (!saved) return demoTransactions;
+    if (!saved) return [];
 
     try {
       const parsed = JSON.parse(saved);
-      return Array.isArray(parsed.transactions) ? parsed.transactions : demoTransactions;
+      return Array.isArray(parsed.transactions) ? parsed.transactions : [];
     } catch {
-      return demoTransactions;
+      return [];
     }
   });
 
@@ -544,11 +451,6 @@ useEffect(() => {
     }
   }
 
-  function handleLoadDemo() {
-    setTransactions(demoTransactions);
-    resetForm();
-  }
-
   function handleResetFilters() {
     setFilterMember("all");
     setFilterType("all");
@@ -772,7 +674,6 @@ useEffect(() => {
                   <Upload size={16} /> Импорт
                   <input type="file" accept="application/json" onChange={importJson} className="hidden" />
                 </label>
-                <button type="button" onClick={handleLoadDemo} className="utility-button"><RotateCcw size={16} /> Пример</button>
                 <button type="button" onClick={handleResetFilters} className="utility-button"><Filter size={16} /> Фильтры</button>
                 <button type="button" onClick={handleClearAll} className="utility-button"><Trash2 size={16} /> Очистить</button>
               </div>

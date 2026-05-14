@@ -37,7 +37,7 @@ import {
   Save,
 } from "lucide-react";
 import alinaPhoto from "./Алина.png";
-import alisaPhoto from "./Алиса1.JPG";
+import alisaPhoto from "./Алиса1.jpg";
 import vikaPhoto from "./Вика.png";
 import grishaPhoto from "./ГришА.png";
 import {

@@ -255,6 +255,8 @@ const demoTransactions = [
 ];
 
 export default function App() {
+    const cloudLoadedRef = useRef(false);
+  const applyingCloudRef = useRef(false);
   const [transactions, setTransactions] = useState(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (!saved) return demoTransactions;

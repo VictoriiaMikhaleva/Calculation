@@ -776,14 +776,16 @@ if (saved) {
                           type="number"
                           min="0"
                           value={item.limit}
-                        onChange={(e) => {
+                  onChange={(e) => {
   const nextLimits = {
     ...limits,
     [item.category]: Number(e.target.value || 0),
   };
 
   setLimits(nextLimits);
-  saveCurrentBudgetToCloud(transactions, nextLimits);
+}}
+onBlur={() => {
+  saveCurrentBudgetToCloud(transactions, limits);
 }}
                         />
                       </div>

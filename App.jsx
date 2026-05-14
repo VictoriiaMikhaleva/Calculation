@@ -164,7 +164,6 @@ function sumAmounts(items, condition) {
 export default function App() {
     const cloudLoadedRef = useRef(false);
   const applyingCloudRef = useRef(false);
-  console.log("App запустился, Firebase должен подключиться");
   const [transactions, setTransactions] = useState(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (!saved) return [];
@@ -207,7 +206,6 @@ export default function App() {
   });
 
  useEffect(() => {
-  console.log("Подключаюсь к Firestore...");
    const unsubscribe = listenBudgetFromCloud(
     (cloudData) => {
       applyingCloudRef.current = true;

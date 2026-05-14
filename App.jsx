@@ -775,7 +775,15 @@ resetForm(form.type);
                           type="number"
                           min="0"
                           value={item.limit}
-                          onChange={(e) => setLimits((prev) => ({ ...prev, [item.category]: Number(e.target.value || 0) }))}
+                        onChange={(e) => {
+  const nextLimits = {
+    ...limits,
+    [item.category]: Number(e.target.value || 0),
+  };
+
+  setLimits(nextLimits);
+  saveCurrentBudgetToCloud(transactions, nextLimits);
+}}
                         />
                       </div>
                       <div className="h-3 overflow-hidden rounded-full bg-white/10">

@@ -245,18 +245,20 @@ export default function App() {
 useEffect(() => {
   localStorage.setItem(STORAGE_KEY, JSON.stringify({ transactions, limits }));
 }, [transactions, limits]);
-function saveCurrentBudgetToCloud(nextTransactions = transactions, nextLimits = limits) {
-  saveBudgetToCloud({
-    transactions: nextTransactions,
-    limits: nextLimits,
-  })
-    .then(() => {
-      console.log("Бюджет сохранён в Firebase");
-    })
-    .catch((error) => {
-      console.error("Ошибка сохранения бюджета в Firebase:", error);
-      alert("Не удалось сохранить данные в облако. Проверьте интернет или Firebase Rules.");
+async function saveCurrentBudgetToCloud(nextTransactions = transactions, nextLimits = limits) {
+  try {
+    await saveBudgetToCloud({
+      transactions: nextTransactions,
+      limits: nextLimits,
     });
+
+    console.log("Бюджет сохранён в Firebase");
+    return true;
+  } catch (error) {
+    console.error("Ошибка сохранения бюджета в Firebase:", error);
+    alert("Не удалось сохранить данные в облако. Проверьте интернет или Firebase Rules.");
+    return false;
+  }
 }
   const availableMonths = useMemo(() => {
     const months = [...new Set(transactions.map((item) => monthKey(item.date)))].sort().reverse();

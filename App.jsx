@@ -40,6 +40,10 @@ import alinaPhoto from "./Алина.png";
 import alisaPhoto from "./Алиса1.JPG";
 import vikaPhoto from "./Вика.png";
 import grishaPhoto from "./ГришА.png";
+import {
+  listenBudgetFromCloud,
+  saveBudgetToCloud,
+} from "./firebase";
 const FAMILY_MEMBERS = [
   { id: "alisa", name: "Алиса", photo: alisaPhoto },
   { id: "alina", name: "Алина", photo: alinaPhoto },

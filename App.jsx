@@ -243,17 +243,7 @@ export default function App() {
 }, []);
 
 useEffect(() => {
-  const data = { transactions, limits };
-
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-
-  if (!cloudLoadedRef.current || applyingCloudRef.current) {
-    return;
-  }
-
-  saveBudgetToCloud(data).catch((error) => {
-    console.error("Ошибка сохранения бюджета в Firebase:", error);
-  });
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({ transactions, limits }));
 }, [transactions, limits]);
 
   const availableMonths = useMemo(() => {

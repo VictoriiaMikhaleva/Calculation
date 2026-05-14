@@ -395,7 +395,7 @@ async function saveCurrentBudgetToCloud(nextTransactions = transactions, nextLim
     setForm((prev) => ({ ...prev, type, category: getDefaultCategory(type), customCategory: "" }));
   }
 
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault();
 
     const amount = Number(form.amount);

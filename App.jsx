@@ -453,12 +453,13 @@ resetForm(form.type);
   if (editingId === id) resetForm();
 }
 
-  function handleClearAll() {
-    if (window.confirm("Удалить все операции?")) {
-      setTransactions([]);
-      resetForm();
-    }
+ function handleClearAll() {
+  if (window.confirm("Удалить все операции?")) {
+    setTransactions([]);
+    saveCurrentBudgetToCloud([], limits);
+    resetForm();
   }
+}
 
   function handleResetFilters() {
     setFilterMember("all");

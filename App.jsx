@@ -445,10 +445,13 @@ resetForm(form.type);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  function handleDelete(id) {
-    setTransactions((prev) => prev.filter((item) => item.id !== id));
-    if (editingId === id) resetForm();
-  }
+ function handleDelete(id) {
+  const nextTransactions = transactions.filter((item) => item.id !== id);
+  setTransactions(nextTransactions);
+  saveCurrentBudgetToCloud(nextTransactions, limits);
+
+  if (editingId === id) resetForm();
+}
 
   function handleClearAll() {
     if (window.confirm("Удалить все операции?")) {

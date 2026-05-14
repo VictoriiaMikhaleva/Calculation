@@ -245,7 +245,16 @@ export default function App() {
 useEffect(() => {
   localStorage.setItem(STORAGE_KEY, JSON.stringify({ transactions, limits }));
 }, [transactions, limits]);
+function saveCurrentBudgetToCloud(nextTransactions = transactions, nextLimits = limits) {
+  if (!cloudLoadedRef.current) return;
 
+  saveBudgetToCloud({
+    transactions: nextTransactions,
+    limits: nextLimits,
+  }).catch((error) => {
+    console.error("Ошибка сохранения бюджета в Firebase:", error);
+  });
+}
   const availableMonths = useMemo(() => {
     const months = [...new Set(transactions.map((item) => monthKey(item.date)))].sort().reverse();
     return months;

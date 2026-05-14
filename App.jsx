@@ -298,9 +298,54 @@ export default function App() {
     note: "",
   });
 
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ transactions, limits }));
-  }, [transactions, limits]);
+ useEffect(() => {
+  const unsubscribe = listenBudgetFromCloud(
+    (cloudData) => {
+      applyingCloudRef.current = true;
+
+      if (cloudData?.transactions && Array.isArray(cloudData.transactions)) {
+        setTransactions(cloudData.transactions);
+      }
+
+      if (cloudData?.limits) {
+        setLimits(cloudData.limits);
+      }
+
+      if (!cloudData) {
+        saveBudgetToCloud({
+          transactions,
+          limits,
+        });
+      }
+
+      cloudLoadedRef.current = true;
+
+      setTimeout(() => {
+        applyingCloudRef.current = false;
+      }, 0);
+    },
+    (error) => {
+      console.error("Ошибка загрузки бюджета из Firebase:", error);
+      cloudLoadedRef.current = true;
+    }
+  );
+
+  return () => unsubscribe();
+}, []);
+
+useEffect(() => {
+  const data = { transactions, limits };
+
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+
+  if (!cloudLoadedRef.current || applyingCloudRef.current) {
+    return;
+  }
+
+  saveBudgetToCloud(data).catch((error) => {
+    console.error("Ошибка сохранения бюджета в Firebase:", error);
+  });
+}, [transactions, limits]);
 
   const availableMonths = useMemo(() => {
     const months = [...new Set(transactions.map((item) => monthKey(item.date)))].sort().reverse();

@@ -431,9 +431,14 @@ if (editingId) {
 }
 
 setTransactions(nextTransactions);
-saveCurrentBudgetToCloud(nextTransactions, limits);
 
-resetForm(form.type);
+const saved = await saveCurrentBudgetToCloud(nextTransactions, limits);
+
+if (saved) {
+  resetForm(form.type);
+} else {
+  alert("Запись добавлена на экране, но не сохранилась в облако. Не обновляйте страницу, пока не исправим ошибку.");
+}
   }
 
   function handleEdit(item) {

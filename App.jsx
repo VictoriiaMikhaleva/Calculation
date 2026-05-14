@@ -300,7 +300,8 @@ export default function App() {
   });
 
  useEffect(() => {
-  const unsubscribe = listenBudgetFromCloud(
+  console.log("Подключаюсь к Firestore...");
+   const unsubscribe = listenBudgetFromCloud(
     (cloudData) => {
       applyingCloudRef.current = true;
 

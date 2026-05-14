@@ -206,7 +206,7 @@ export default function App() {
   });
 
  useEffect(() => {
-   const unsubscribe = listenBudgetFromCloud(
+  const unsubscribe = listenBudgetFromCloud(
     (cloudData) => {
       applyingCloudRef.current = true;
 
@@ -216,13 +216,6 @@ export default function App() {
 
       if (cloudData?.limits) {
         setLimits(cloudData.limits);
-      }
-
-      if (!cloudData) {
-        saveBudgetToCloud({
-          transactions,
-          limits,
-        });
       }
 
       cloudLoadedRef.current = true;

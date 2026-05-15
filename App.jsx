@@ -40,6 +40,7 @@ import alisaPhoto from "./Алиса1.jpg";
 import vikaPhoto from "./Вика.png";
 import grishaPhoto from "./ГришА.png";
 import {
+  getCloudRevision,
   listenBudgetFromCloud,
   saveBudgetToCloud,
 } from "./firebase";
@@ -161,32 +162,36 @@ function sumAmounts(items, condition) {
   return items.reduce((sum, item) => (condition(item) ? sum + Number(item.amount || 0) : sum), 0);
 }
 
+function loadStoredBudget() {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (!saved) {
+      return { transactions: [], limits: DEFAULT_LIMITS, revision: 0 };
+    }
+
+    const parsed = JSON.parse(saved);
+    return {
+      transactions: Array.isArray(parsed.transactions) ? parsed.transactions : [],
+      limits: parsed.limits || DEFAULT_LIMITS,
+      revision: typeof parsed.revision === "number" ? parsed.revision : 0,
+    };
+  } catch {
+    return { transactions: [], limits: DEFAULT_LIMITS, revision: 0 };
+  }
+}
+
 export default function App() {
-    const cloudLoadedRef = useRef(false);
+  const initialBudget = loadStoredBudget();
+  const cloudLoadedRef = useRef(false);
   const applyingCloudRef = useRef(false);
-  const [transactions, setTransactions] = useState(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (!saved) return [];
+  const cloudSeedAttemptedRef = useRef(false);
+  const hasHydratedFromServerRef = useRef(false);
+  const revisionRef = useRef(initialBudget.revision);
+  const transactionsRef = useRef(initialBudget.transactions);
+  const limitsRef = useRef(initialBudget.limits);
 
-    try {
-      const parsed = JSON.parse(saved);
-      return Array.isArray(parsed.transactions) ? parsed.transactions : [];
-    } catch {
-      return [];
-    }
-  });
-
-  const [limits, setLimits] = useState(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (!saved) return DEFAULT_LIMITS;
-
-    try {
-      const parsed = JSON.parse(saved);
-      return parsed.limits || DEFAULT_LIMITS;
-    } catch {
-      return DEFAULT_LIMITS;
-    }
-  });
+  const [transactions, setTransactions] = useState(initialBudget.transactions);
+  const [limits, setLimits] = useState(initialBudget.limits);
 
   const [filterMember, setFilterMember] = useState("all");
   const [filterType, setFilterType] = useState("all");
@@ -205,52 +210,117 @@ export default function App() {
     note: "",
   });
 
- useEffect(() => {
-  const unsubscribe = listenBudgetFromCloud(
-    (cloudData) => {
-      applyingCloudRef.current = true;
+  useEffect(() => {
+    transactionsRef.current = transactions;
+  }, [transactions]);
 
-      if (cloudData?.transactions && Array.isArray(cloudData.transactions)) {
-        setTransactions(cloudData.transactions);
+  useEffect(() => {
+    limitsRef.current = limits;
+  }, [limits]);
+
+  useEffect(() => {
+    const allowCacheFallback = setTimeout(() => {
+      hasHydratedFromServerRef.current = true;
+    }, 4000);
+
+    const unsubscribe = listenBudgetFromCloud(
+      (update) => {
+        if (!update.exists) {
+          cloudLoadedRef.current = true;
+
+          if (!cloudSeedAttemptedRef.current && transactionsRef.current.length > 0) {
+            cloudSeedAttemptedRef.current = true;
+            saveCurrentBudgetToCloud(transactionsRef.current, limitsRef.current);
+          }
+          return;
+        }
+
+        const cloudRevision = getCloudRevision(update.data);
+
+        if (update.fromCache && cloudRevision < revisionRef.current) {
+          return;
+        }
+
+        if (cloudRevision < revisionRef.current) {
+          return;
+        }
+
+        if (!hasHydratedFromServerRef.current && update.fromCache) {
+          return;
+        }
+
+        if (!update.fromCache) {
+          hasHydratedFromServerRef.current = true;
+        }
+
+        applyingCloudRef.current = true;
+
+        if (Array.isArray(update.data.transactions)) {
+          setTransactions(update.data.transactions);
+          transactionsRef.current = update.data.transactions;
+        }
+
+        if (update.data.limits) {
+          setLimits(update.data.limits);
+          limitsRef.current = update.data.limits;
+        }
+
+        revisionRef.current = cloudRevision;
+        cloudLoadedRef.current = true;
+
+        requestAnimationFrame(() => {
+          applyingCloudRef.current = false;
+        });
+      },
+      (error) => {
+        console.error("Ошибка загрузки бюджета из Firebase:", error);
+        cloudLoadedRef.current = true;
+        hasHydratedFromServerRef.current = true;
       }
+    );
 
-      if (cloudData?.limits) {
-        setLimits(cloudData.limits);
-      }
+    return () => {
+      clearTimeout(allowCacheFallback);
+      unsubscribe();
+    };
+  }, []);
 
-      cloudLoadedRef.current = true;
-
-      setTimeout(() => {
-        applyingCloudRef.current = false;
-      }, 0);
-    },
-    (error) => {
-      console.error("Ошибка загрузки бюджета из Firebase:", error);
-      cloudLoadedRef.current = true;
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({
+          transactions,
+          limits,
+          revision: revisionRef.current,
+        })
+      );
+    } catch (error) {
+      console.error("Не удалось сохранить в localStorage:", error);
     }
-  );
+  }, [transactions, limits]);
 
-  return () => unsubscribe();
-}, []);
+  async function saveCurrentBudgetToCloud(
+    nextTransactions = transactionsRef.current,
+    nextLimits = limitsRef.current
+  ) {
+    const nextRevision = revisionRef.current + 1;
+    revisionRef.current = nextRevision;
 
-useEffect(() => {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify({ transactions, limits }));
-}, [transactions, limits]);
-async function saveCurrentBudgetToCloud(nextTransactions = transactions, nextLimits = limits) {
-  try {
-    await saveBudgetToCloud({
-      transactions: nextTransactions,
-      limits: nextLimits,
-    });
-
-    console.log("Бюджет сохранён в Firebase");
-    return true;
-  } catch (error) {
-    console.error("Ошибка сохранения бюджета в Firebase:", error);
-    alert("Не удалось сохранить данные в облако. Проверьте интернет или Firebase Rules.");
-    return false;
+    try {
+      await saveBudgetToCloud({
+        transactions: nextTransactions,
+        limits: nextLimits,
+        revision: nextRevision,
+      });
+      return true;
+    } catch (error) {
+      revisionRef.current = nextRevision - 1;
+      console.error("Ошибка сохранения бюджета в Firebase:", error);
+      alert("Не удалось сохранить данные в облако. Проверьте интернет или правила Firestore в Firebase Console.");
+      return false;
+    }
   }
-}
   const availableMonths = useMemo(() => {
     const months = [...new Set(transactions.map((item) => monthKey(item.date)))].sort().reverse();
     return months;
@@ -422,8 +492,9 @@ if (editingId) {
 }
 
 setTransactions(nextTransactions);
+transactionsRef.current = nextTransactions;
 
-const saved = await saveCurrentBudgetToCloud(nextTransactions, limits);
+const saved = await saveCurrentBudgetToCloud(nextTransactions, limitsRef.current);
 
 if (saved) {
   resetForm(form.type);
@@ -446,21 +517,23 @@ if (saved) {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
- function handleDelete(id) {
-  const nextTransactions = transactions.filter((item) => item.id !== id);
-  setTransactions(nextTransactions);
-  saveCurrentBudgetToCloud(nextTransactions, limits);
+  async function handleDelete(id) {
+    const nextTransactions = transactions.filter((item) => item.id !== id);
+    setTransactions(nextTransactions);
+    transactionsRef.current = nextTransactions;
+    await saveCurrentBudgetToCloud(nextTransactions, limitsRef.current);
 
-  if (editingId === id) resetForm();
-}
-
- function handleClearAll() {
-  if (window.confirm("Удалить все операции?")) {
-    setTransactions([]);
-    saveCurrentBudgetToCloud([], limits);
-    resetForm();
+    if (editingId === id) resetForm();
   }
-}
+
+  async function handleClearAll() {
+    if (window.confirm("Удалить все операции?")) {
+      setTransactions([]);
+      transactionsRef.current = [];
+      await saveCurrentBudgetToCloud([], limitsRef.current);
+      resetForm();
+    }
+  }
 
   function handleResetFilters() {
     setFilterMember("all");
@@ -508,12 +581,16 @@ if (saved) {
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = () => {
+    reader.onload = async () => {
       try {
         const parsed = JSON.parse(String(reader.result));
         if (!Array.isArray(parsed.transactions)) throw new Error("bad file");
+        const nextLimits = parsed.limits || DEFAULT_LIMITS;
         setTransactions(parsed.transactions);
-        setLimits(parsed.limits || DEFAULT_LIMITS);
+        setLimits(nextLimits);
+        transactionsRef.current = parsed.transactions;
+        limitsRef.current = nextLimits;
+        await saveCurrentBudgetToCloud(parsed.transactions, nextLimits);
         resetForm();
       } catch {
         alert("Не получилось импортировать файл. Проверьте, что это JSON-экспорт из этого приложения.");
@@ -776,17 +853,17 @@ if (saved) {
                           type="number"
                           min="0"
                           value={item.limit}
-                  onChange={(e) => {
-  const nextLimits = {
-    ...limits,
-    [item.category]: Number(e.target.value || 0),
-  };
-
-  setLimits(nextLimits);
-}}
-onBlur={() => {
-  saveCurrentBudgetToCloud(transactions, limits);
-}}
+                          onChange={(e) => {
+                            const nextLimits = {
+                              ...limits,
+                              [item.category]: Number(e.target.value || 0),
+                            };
+                            setLimits(nextLimits);
+                            limitsRef.current = nextLimits;
+                          }}
+                          onBlur={() => {
+                            saveCurrentBudgetToCloud(transactionsRef.current, limitsRef.current);
+                          }}
                         />
                       </div>
                       <div className="h-3 overflow-hidden rounded-full bg-white/10">

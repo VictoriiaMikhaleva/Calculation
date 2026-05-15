@@ -26,11 +26,13 @@ export function getBudgetDocRef() {
   return doc(db, "budgets", FAMILY_BUDGET_ID);
 }
 
-export async function saveBudgetToCloud(data) {
+export async function saveBudgetToCloud({ transactions, limits, revision }) {
   await setDoc(
     getBudgetDocRef(),
     {
-      ...data,
+      transactions,
+      limits,
+      revision,
       updatedAt: serverTimestamp(),
     },
     { merge: true }
@@ -40,9 +42,19 @@ export async function saveBudgetToCloud(data) {
 export function listenBudgetFromCloud(callback, onError) {
   return onSnapshot(
     getBudgetDocRef(),
+    { includeMetadataChanges: true },
     (snapshot) => {
-      callback(snapshot.exists() ? snapshot.data() : null);
+      callback({
+        exists: snapshot.exists(),
+        data: snapshot.exists() ? snapshot.data() : null,
+        fromCache: snapshot.metadata.fromCache,
+        hasPendingWrites: snapshot.metadata.hasPendingWrites,
+      });
     },
     onError
   );
+}
+
+export function getCloudRevision(data) {
+  return typeof data?.revision === "number" ? data.revision : 0;
 }

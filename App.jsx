@@ -1070,7 +1070,8 @@ if (saved) {
     <EmptyState text="Операций по выбранным фильтрам пока нет." />
   )}
 </div>
-                {/* Таблица для планшета и компьютера */}
+
+{/* Таблица для планшета и компьютера */}
 <div className="hidden overflow-x-auto rounded-2xl border border-white/10 md:block">
   <table className="w-full min-w-[900px] border-collapse text-left text-sm">
     <thead className="bg-slate-900 text-slate-300">

@@ -162,6 +162,22 @@ function sumAmounts(items, condition) {
   return items.reduce((sum, item) => (condition(item) ? sum + Number(item.amount || 0) : sum), 0);
 }
 
+function useMediaQuery(query) {
+  const [matches, setMatches] = useState(() =>
+    typeof window !== "undefined" ? window.matchMedia(query).matches : false
+  );
+
+  useEffect(() => {
+    const media = window.matchMedia(query);
+    const onChange = () => setMatches(media.matches);
+    onChange();
+    media.addEventListener("change", onChange);
+    return () => media.removeEventListener("change", onChange);
+  }, [query]);
+
+  return matches;
+}
+
 function loadStoredBudget() {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
@@ -199,6 +215,8 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState("");
   const [editingId, setEditingId] = useState(null);
   const [activeTab, setActiveTab] = useState("dashboard");
+  const isCompact = useMediaQuery("(max-width: 639px)");
+  const chartHeight = isCompact ? 240 : 320;
 
   const [form, setForm] = useState({
     type: "expense",
@@ -601,37 +619,45 @@ if (saved) {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 p-4 text-slate-100 md:p-8">
-      <div className="mx-auto max-w-7xl space-y-6">
-        <header className="overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-slate-900 via-slate-900 to-slate-800 p-6 shadow-2xl">
-          <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+    <div className="min-h-screen overflow-x-hidden bg-slate-950 text-slate-100 safe-area-x safe-area-bottom">
+      <div className="mx-auto max-w-7xl space-y-4 p-3 sm:space-y-6 sm:p-4 md:p-8">
+        <header className="overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900 via-slate-900 to-slate-800 p-4 shadow-2xl sm:rounded-3xl sm:p-6">
+          <div className="flex flex-col gap-4 sm:gap-6 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-sm text-slate-300">
-                <Users size={16} /> Семейный бюджет: Алиса, Алина, Гриша и Вика
+              <div className="mb-2 inline-flex max-w-full items-center gap-2 rounded-full bg-white/10 px-2.5 py-1 text-xs text-slate-300 sm:mb-3 sm:px-3 sm:text-sm">
+                <Users size={14} className="shrink-0 sm:h-4 sm:w-4" />
+                <span className="sm:hidden">Семейный бюджет</span>
+                <span className="hidden sm:inline">Семейный бюджет: Алиса, Алина, Гриша и Вика</span>
               </div>
-              <h1 className="text-3xl font-bold tracking-tight md:text-5xl">Калькулятор доходов и расходов</h1>
-              <p className="mt-3 max-w-2xl text-slate-300">
-                Вносите доходы и траты, выбирайте участника семьи, следите за лимитами, графиками, балансом и накоплениями.
+              <h1 className="text-2xl font-bold leading-tight tracking-tight sm:text-3xl md:text-5xl">
+                Калькулятор доходов и расходов
+              </h1>
+              <p className="mt-2 text-sm text-slate-300 sm:mt-3 sm:text-base">
+                Вносите доходы и траты, следите за лимитами, графиками и балансом.
               </p>
             </div>
 
-            <div className={`rounded-3xl p-5 text-right ${balance >= 0 ? "bg-green-500/15" : "bg-red-500/15"}`}>
+            <div
+              className={`w-full shrink-0 rounded-2xl p-4 sm:w-auto sm:rounded-3xl sm:p-5 sm:text-right ${
+                balance >= 0 ? "bg-green-500/15" : "bg-red-500/15"
+              }`}
+            >
               <p className="text-sm text-slate-300">Текущий баланс</p>
-              <p className={`text-4xl font-black ${balance >= 0 ? "text-green-400" : "text-red-400"}`}>{currency.format(balance)}</p>
+              <p className={`text-3xl font-black leading-none sm:text-4xl ${balance >= 0 ? "text-green-400" : "text-red-400"}`}>
+                {currency.format(balance)}
+              </p>
               <p className="mt-1 text-sm text-slate-400">Норма накопления: {savingRate}%</p>
             </div>
           </div>
         </header>
 
-        <section className="rounded-3xl border border-white/10 bg-white/5 p-5 shadow-xl">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <Users size={20} />
-              <h2 className="text-2xl font-bold">Участники семьи</h2>
-            </div>
+        <section className="rounded-2xl border border-white/10 bg-white/5 p-4 shadow-xl sm:rounded-3xl sm:p-5">
+          <div className="mb-3 flex items-center gap-2 sm:mb-4">
+            <Users size={20} />
+            <h2 className="text-xl font-bold sm:text-2xl">Участники семьи</h2>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
             {FAMILY_MEMBERS.map((member) => {
               const income = sumAmounts(transactions, (item) => item.memberId === member.id && item.type === "income");
               const expense = sumAmounts(transactions, (item) => item.memberId === member.id && item.type === "expense");
@@ -641,14 +667,14 @@ if (saved) {
                   key={member.id}
                   type="button"
                   onClick={() => setFilterMember(member.id)}
-                  className="rounded-2xl border border-white/10 bg-slate-900/70 p-4 text-left transition hover:-translate-y-1 hover:bg-slate-900"
+                  className="rounded-2xl border border-white/10 bg-slate-900/70 p-3 text-left transition active:scale-[0.98] sm:p-4 sm:hover:-translate-y-1 sm:hover:bg-slate-900"
                 >
-                  <div className="flex items-center gap-4">
-                    <MemberAvatar name={member.name} photo={member.photo} size="lg" />
-                    <div>
-                      <div className="text-xl font-bold">{member.name}</div>
-                      <div className="mt-1 text-sm text-green-400">+ {currency.format(income)}</div>
-                      <div className="text-sm text-red-400">- {currency.format(expense)}</div>
+                  <div className="flex flex-col items-center gap-2 text-center sm:flex-row sm:items-center sm:gap-4 sm:text-left">
+                    <MemberAvatar name={member.name} photo={member.photo} size={isCompact ? "md" : "lg"} />
+                    <div className="min-w-0">
+                      <div className="text-base font-bold sm:text-xl">{member.name}</div>
+                      <div className="mt-0.5 text-xs text-green-400 sm:mt-1 sm:text-sm">+ {currency.format(income)}</div>
+                      <div className="text-xs text-red-400 sm:text-sm">- {currency.format(expense)}</div>
                     </div>
                   </div>
                 </button>
@@ -657,7 +683,7 @@ if (saved) {
           </div>
         </section>
 
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+        <section className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-2 xl:grid-cols-5">
           <StatCard icon={<TrendingUp />} label="Доходы" value={currency.format(totalIncome)} tone="green" />
           <StatCard icon={<TrendingDown />} label="Расходы" value={currency.format(totalExpense)} tone="red" />
           <StatCard icon={<Wallet />} label="Остаток" value={currency.format(balance)} tone={balance >= 0 ? "green" : "red"} />
@@ -670,10 +696,10 @@ if (saved) {
           />
         </section>
 
-        <main className="grid gap-6 lg:grid-cols-[430px_1fr]">
-          <section className="rounded-3xl border border-white/10 bg-white/5 p-5 shadow-xl">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-2xl font-bold">{editingId ? "Редактировать операцию" : "Добавить операцию"}</h2>
+        <main className="grid gap-4 sm:gap-6 lg:grid-cols-[minmax(0,430px)_1fr]">
+          <section className="rounded-2xl border border-white/10 bg-white/5 p-4 shadow-xl sm:rounded-3xl sm:p-5">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-xl font-bold sm:text-2xl">{editingId ? "Редактировать операцию" : "Добавить операцию"}</h2>
               {editingId && (
                 <button type="button" onClick={() => resetForm()} className="inline-flex items-center gap-2 rounded-xl bg-white/10 px-3 py-2 text-sm hover:bg-white/15">
                   <X size={16} /> Отмена
@@ -749,7 +775,7 @@ if (saved) {
 
               <button
                 type="submit"
-                className={`mt-4 flex w-full items-center justify-center gap-2 rounded-2xl px-5 py-4 font-bold text-white shadow-lg transition hover:scale-[1.01] ${form.type === "expense" ? "bg-red-500 hover:bg-red-400" : "bg-green-500 hover:bg-green-400"}`}
+                className={`mt-4 flex min-h-[48px] w-full touch-manipulation items-center justify-center gap-2 rounded-2xl px-5 py-4 font-bold text-white shadow-lg transition active:scale-[0.99] sm:hover:scale-[1.01] ${form.type === "expense" ? "bg-red-500 hover:bg-red-400" : "bg-green-500 hover:bg-green-400"}`}
               >
                 {editingId ? <Save size={18} /> : <Plus size={18} />}
                 {editingId ? "Сохранить изменения" : "Добавить"}
@@ -770,11 +796,11 @@ if (saved) {
 
           <section className="space-y-6">
             <div className="rounded-3xl border border-white/10 bg-white/5 p-2 shadow-xl">
-              <div className="grid gap-2 md:grid-cols-4">
-                <TabButton active={activeTab === "dashboard"} onClick={() => setActiveTab("dashboard")} icon={<LineChart size={16} />} label="Графики" />
-                <TabButton active={activeTab === "limits"} onClick={() => setActiveTab("limits")} icon={<Target size={16} />} label="Лимиты" />
-                <TabButton active={activeTab === "history"} onClick={() => setActiveTab("history")} icon={<CalendarDays size={16} />} label="История" />
-                <TabButton active={activeTab === "advice"} onClick={() => setActiveTab("advice")} icon={<CheckCircle2 size={16} />} label="Советы" />
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                <TabButton active={activeTab === "dashboard"} onClick={() => setActiveTab("dashboard")} icon={<LineChart size={16} />} label="Графики" compact={isCompact} />
+                <TabButton active={activeTab === "limits"} onClick={() => setActiveTab("limits")} icon={<Target size={16} />} label="Лимиты" compact={isCompact} />
+                <TabButton active={activeTab === "history"} onClick={() => setActiveTab("history")} icon={<CalendarDays size={16} />} label="История" compact={isCompact} />
+                <TabButton active={activeTab === "advice"} onClick={() => setActiveTab("advice")} icon={<CheckCircle2 size={16} />} label="Советы" compact={isCompact} />
               </div>
             </div>
 
@@ -783,23 +809,30 @@ if (saved) {
                 <div className="grid gap-6 xl:grid-cols-2">
                   <ChartCard title="На что уходит больше денег">
                     {expensesByCategory.length ? (
-                      <ResponsiveContainer width="100%" height={320}>
+                      <ResponsiveContainer width="100%" height={chartHeight}>
                         <PieChart>
-                          <Pie data={expensesByCategory} dataKey="value" nameKey="name" outerRadius={112} label={({ name, percent }) => `${name} ${Math.round(percent * 100)}%`}>
+                          <Pie
+                            data={expensesByCategory}
+                            dataKey="value"
+                            nameKey="name"
+                            outerRadius={isCompact ? 72 : 112}
+                            label={isCompact ? false : ({ name, percent }) => `${name} ${Math.round(percent * 100)}%`}
+                          >
                             {expensesByCategory.map((_, index) => <Cell key={index} fill={PIE_COLORS[index % PIE_COLORS.length]} />)}
                           </Pie>
                           <Tooltip formatter={(value) => currency.format(value)} />
+                          {isCompact && <Legend wrapperStyle={{ fontSize: 12 }} />}
                         </PieChart>
                       </ResponsiveContainer>
                     ) : <EmptyState text="Добавьте расходы, чтобы увидеть диаграмму." />}
                   </ChartCard>
 
                   <ChartCard title="Доходы и расходы по участникам">
-                    <ResponsiveContainer width="100%" height={320}>
-                      <BarChart data={memberBarData}>
+                    <ResponsiveContainer width="100%" height={chartHeight}>
+                      <BarChart data={memberBarData} margin={isCompact ? { left: -12, right: 4, bottom: 0 } : undefined}>
                         <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
-                        <XAxis dataKey="name" stroke="#cbd5e1" />
-                        <YAxis stroke="#cbd5e1" tickFormatter={(value) => `${Math.round(value / 1000)}к`} />
+                        <XAxis dataKey="name" stroke="#cbd5e1" tick={{ fontSize: isCompact ? 11 : 12 }} />
+                        <YAxis stroke="#cbd5e1" width={isCompact ? 36 : 60} tick={{ fontSize: 11 }} tickFormatter={(value) => `${Math.round(value / 1000)}к`} />
                         <Tooltip formatter={(value) => currency.format(value)} contentStyle={{ background: "#0f172a", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 16 }} />
                         <Legend />
                         <Bar dataKey="Доходы" fill="#22c55e" radius={[8, 8, 0, 0]} />
@@ -811,11 +844,11 @@ if (saved) {
 
                 <ChartCard title="Динамика по месяцам">
                   {monthlyData.length ? (
-                    <ResponsiveContainer width="100%" height={330}>
-                      <AreaChart data={monthlyData}>
+                    <ResponsiveContainer width="100%" height={chartHeight + 10}>
+                      <AreaChart data={monthlyData} margin={isCompact ? { left: -12, right: 4 } : undefined}>
                         <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
-                        <XAxis dataKey="month" stroke="#cbd5e1" />
-                        <YAxis stroke="#cbd5e1" tickFormatter={(value) => `${Math.round(value / 1000)}к`} />
+                        <XAxis dataKey="month" stroke="#cbd5e1" tick={{ fontSize: 11 }} />
+                        <YAxis stroke="#cbd5e1" width={isCompact ? 36 : 60} tick={{ fontSize: 11 }} tickFormatter={(value) => `${Math.round(value / 1000)}к`} />
                         <Tooltip formatter={(value) => currency.format(value)} contentStyle={{ background: "#0f172a", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 16 }} />
                         <Legend />
                         <Area type="monotone" dataKey="Доходы" stroke="#22c55e" fill="#22c55e" fillOpacity={0.18} />
@@ -829,10 +862,10 @@ if (saved) {
             )}
 
             {activeTab === "limits" && (
-              <div className="rounded-3xl border border-white/10 bg-white/5 p-5 shadow-xl">
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4 shadow-xl sm:rounded-3xl sm:p-5">
                 <div className="mb-4 flex items-center gap-2">
                   <Target size={20} />
-                  <h2 className="text-2xl font-bold">Лимиты на текущий месяц</h2>
+                  <h2 className="text-xl font-bold sm:text-2xl">Лимиты на текущий месяц</h2>
                 </div>
 
                 <div className="space-y-3">
@@ -877,15 +910,15 @@ if (saved) {
             )}
 
             {activeTab === "history" && (
-              <div className="rounded-3xl border border-white/10 bg-white/5 p-5 shadow-xl">
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4 shadow-xl sm:rounded-3xl sm:p-5">
                 <div className="mb-4 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
                   <div>
-                    <h2 className="text-2xl font-bold">История операций</h2>
+                    <h2 className="text-xl font-bold sm:text-2xl">История операций</h2>
                     <p className="mt-1 text-sm text-slate-400">В фильтре: доходы {currency.format(filteredIncome)}, расходы {currency.format(filteredExpense)}</p>
                   </div>
 
-                  <div className="grid gap-2 md:grid-cols-4">
-                    <div className="relative">
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-4">
+                    <div className="relative sm:col-span-2 md:col-span-1">
                       <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
                       <input className="small-input w-full pl-9" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Поиск" />
                     </div>
@@ -904,8 +937,20 @@ if (saved) {
                   </div>
                 </div>
 
-                <div className="overflow-x-auto rounded-2xl border border-white/10">
-                  <table className="w-full min-w-[900px] border-collapse text-left text-sm">
+                <div className="space-y-3 md:hidden">
+                  {visibleTransactions.map((item) => (
+                    <TransactionCard
+                      key={item.id}
+                      item={item}
+                      onEdit={() => handleEdit(item)}
+                      onDelete={() => handleDelete(item.id)}
+                    />
+                  ))}
+                  {!visibleTransactions.length && <EmptyState text="Операций по выбранным фильтрам пока нет." />}
+                </div>
+
+                <div className="hidden overflow-x-auto rounded-2xl border border-white/10 md:block">
+                  <table className="w-full border-collapse text-left text-sm">
                     <thead className="bg-slate-900 text-slate-300">
                       <tr>
                         <th className="p-3">Дата</th>
@@ -957,10 +1002,10 @@ if (saved) {
             )}
 
             {activeTab === "advice" && (
-              <div className="rounded-3xl border border-white/10 bg-white/5 p-5 shadow-xl">
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4 shadow-xl sm:rounded-3xl sm:p-5">
                 <div className="mb-4 flex items-center gap-2">
                   <CheckCircle2 size={20} />
-                  <h2 className="text-2xl font-bold">Подсказки по бюджету</h2>
+                  <h2 className="text-xl font-bold sm:text-2xl">Подсказки по бюджету</h2>
                 </div>
 
                 <div className="space-y-3">
@@ -1004,12 +1049,14 @@ if (saved) {
           align-items: center;
           justify-content: center;
           gap: 0.35rem;
+          min-height: 44px;
           border-radius: 1rem;
           background: rgba(255,255,255,0.07);
           padding: 0.75rem;
           font-size: 0.85rem;
           color: #cbd5e1;
           transition: 0.2s;
+          touch-action: manipulation;
         }
         .utility-button:hover {
           background: rgba(255,255,255,0.12);
@@ -1017,6 +1064,54 @@ if (saved) {
         }
       `}</style>
     </div>
+  );
+}
+
+function TransactionCard({ item, onEdit, onDelete }) {
+  const memberName = getMemberName(item.memberId);
+
+  return (
+    <article className="rounded-2xl border border-white/10 bg-slate-900/70 p-4">
+      <div className="mb-3 flex items-start justify-between gap-2">
+        <div>
+          <p className="text-sm text-slate-400">{item.date}</p>
+          <span
+            className={`mt-1 inline-block rounded-full px-2.5 py-0.5 text-xs font-bold ${
+              item.type === "income" ? "bg-green-500/15 text-green-400" : "bg-red-500/15 text-red-400"
+            }`}
+          >
+            {item.type === "income" ? "Доход" : "Расход"}
+          </span>
+        </div>
+        <p className={`shrink-0 text-lg font-bold ${item.type === "income" ? "text-green-400" : "text-red-400"}`}>
+          {item.type === "income" ? "+" : "-"}
+          {currency.format(item.amount)}
+        </p>
+      </div>
+      <div className="flex items-center gap-2 text-sm">
+        <MemberAvatar name={memberName} photo={getMemberPhoto(item.memberId)} size="sm" />
+        <span className="font-medium">{memberName}</span>
+        <span className="text-slate-600">·</span>
+        <span className="truncate text-slate-300">{getCategoryLabel(item)}</span>
+      </div>
+      {item.note ? <p className="mt-2 text-sm text-slate-400">{item.note}</p> : null}
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          onClick={onEdit}
+          className="flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl bg-white/10 text-sm text-slate-200 active:bg-white/15"
+        >
+          <Pencil size={16} /> Изменить
+        </button>
+        <button
+          type="button"
+          onClick={onDelete}
+          className="flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl bg-red-500/10 text-sm text-red-400 active:bg-red-500/20"
+        >
+          <Trash2 size={16} /> Удалить
+        </button>
+      </div>
+    </article>
   );
 }
 
@@ -1029,14 +1124,14 @@ function Field({ label, children }) {
   );
 }
 
-function TabButton({ active, onClick, icon, label }) {
+function TabButton({ active, onClick, icon, label, compact = false }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`flex items-center justify-center gap-2 rounded-2xl px-4 py-3 font-semibold transition ${
-        active ? "bg-white text-slate-950" : "text-slate-300 hover:bg-white/10 hover:text-white"
-      }`}
+      className={`flex touch-manipulation items-center justify-center rounded-2xl font-semibold transition ${
+        compact ? "gap-1.5 px-2 py-2.5 text-sm" : "gap-2 px-4 py-3"
+      } ${active ? "bg-white text-slate-950" : "text-slate-300 hover:bg-white/10 hover:text-white"}`}
     >
       {icon}
       {label}
@@ -1052,18 +1147,18 @@ function StatCard({ icon, label, value, tone }) {
   }[tone];
 
   return (
-    <div className={`rounded-3xl border p-5 shadow-xl ${toneClass}`}>
-      <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-white/10">{icon}</div>
-      <p className="text-sm text-slate-300">{label}</p>
-      <p className="mt-1 text-xl font-black text-white">{value}</p>
+    <div className={`rounded-2xl border p-4 shadow-xl sm:rounded-3xl sm:p-5 ${toneClass}`}>
+      <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-2xl bg-white/10 sm:mb-3 sm:h-11 sm:w-11">{icon}</div>
+      <p className="text-xs text-slate-300 sm:text-sm">{label}</p>
+      <p className="mt-1 break-words text-base font-black leading-snug text-white sm:text-xl">{value}</p>
     </div>
   );
 }
 
 function ChartCard({ title, children }) {
   return (
-    <div className="rounded-3xl border border-white/10 bg-white/5 p-5 shadow-xl">
-      <h2 className="mb-4 text-xl font-bold">{title}</h2>
+    <div className="rounded-2xl border border-white/10 bg-white/5 p-4 shadow-xl sm:rounded-3xl sm:p-5">
+      <h2 className="mb-3 text-lg font-bold sm:mb-4 sm:text-xl">{title}</h2>
       {children}
     </div>
   );

@@ -1224,6 +1224,23 @@ if (saved) {
           background: rgba(255,255,255,0.12);
           color: white;
         }
+        .history-mobile-cards {
+  display: none;
+}
+
+.history-desktop-table {
+  display: block;
+}
+
+@media (max-width: 767px) {
+  .history-mobile-cards {
+    display: block !important;
+  }
+
+  .history-desktop-table {
+    display: none !important;
+  }
+}
       `}</style>
     </div>
   );

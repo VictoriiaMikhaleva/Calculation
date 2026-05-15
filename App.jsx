@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+﻿import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Area,
   AreaChart,
@@ -939,12 +939,55 @@ if (saved) {
 
                 <div className="space-y-3 md:hidden">
                   {visibleTransactions.map((item) => (
-                    <TransactionCard
+                    <article
                       key={item.id}
-                      item={item}
-                      onEdit={() => handleEdit(item)}
-                      onDelete={() => handleDelete(item.id)}
-                    />
+                      className="space-y-3 rounded-2xl border border-white/10 bg-slate-900/70 p-4"
+                    >
+                      <p className="text-sm text-slate-400">{item.date}</p>
+                      <span
+                        className={`inline-block rounded-full px-3 py-1 text-xs font-bold ${
+                          item.type === "income" ? "bg-green-500/15 text-green-400" : "bg-red-500/15 text-red-400"
+                        }`}
+                      >
+                        {item.type === "income" ? "Доход" : "Расход"}
+                      </span>
+                      <div className="flex items-center gap-3">
+                        <MemberAvatar
+                          name={getMemberName(item.memberId)}
+                          photo={getMemberPhoto(item.memberId)}
+                          size="sm"
+                        />
+                        <span className="font-medium">{getMemberName(item.memberId)}</span>
+                      </div>
+                      <p className="text-sm text-slate-200">{getCategoryLabel(item)}</p>
+                      <p className="text-sm text-slate-400">{item.note || "—"}</p>
+                      <p
+                        className={`text-lg font-bold ${
+                          item.type === "income" ? "text-green-400" : "text-red-400"
+                        }`}
+                      >
+                        {item.type === "income" ? "+" : "-"}
+                        {currency.format(item.amount)}
+                      </p>
+                      <div className="grid grid-cols-2 gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => handleEdit(item)}
+                          className="flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl bg-white/10 text-sm text-slate-200 active:bg-white/15"
+                          title="Редактировать"
+                        >
+                          <Pencil size={16} /> Изменить
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(item.id)}
+                          className="flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl bg-red-500/10 text-sm text-red-400 active:bg-red-500/20"
+                          title="Удалить"
+                        >
+                          <Trash2 size={16} /> Удалить
+                        </button>
+                      </div>
+                    </article>
                   ))}
                   {!visibleTransactions.length && <EmptyState text="Операций по выбранным фильтрам пока нет." />}
                 </div>
@@ -973,11 +1016,11 @@ if (saved) {
                           </td>
                           <td className="p-3">
                             <div className="flex items-center gap-3">
-                            <MemberAvatar
-  name={getMemberName(item.memberId)}
-  photo={getMemberPhoto(item.memberId)}
-  size="sm"
-/>
+                              <MemberAvatar
+                                name={getMemberName(item.memberId)}
+                                photo={getMemberPhoto(item.memberId)}
+                                size="sm"
+                              />
                               <span>{getMemberName(item.memberId)}</span>
                             </div>
                           </td>
@@ -1067,53 +1110,6 @@ if (saved) {
   );
 }
 
-function TransactionCard({ item, onEdit, onDelete }) {
-  const memberName = getMemberName(item.memberId);
-
-  return (
-    <article className="rounded-2xl border border-white/10 bg-slate-900/70 p-4">
-      <div className="mb-3 flex items-start justify-between gap-2">
-        <div>
-          <p className="text-sm text-slate-400">{item.date}</p>
-          <span
-            className={`mt-1 inline-block rounded-full px-2.5 py-0.5 text-xs font-bold ${
-              item.type === "income" ? "bg-green-500/15 text-green-400" : "bg-red-500/15 text-red-400"
-            }`}
-          >
-            {item.type === "income" ? "Доход" : "Расход"}
-          </span>
-        </div>
-        <p className={`shrink-0 text-lg font-bold ${item.type === "income" ? "text-green-400" : "text-red-400"}`}>
-          {item.type === "income" ? "+" : "-"}
-          {currency.format(item.amount)}
-        </p>
-      </div>
-      <div className="flex items-center gap-2 text-sm">
-        <MemberAvatar name={memberName} photo={getMemberPhoto(item.memberId)} size="sm" />
-        <span className="font-medium">{memberName}</span>
-        <span className="text-slate-600">·</span>
-        <span className="truncate text-slate-300">{getCategoryLabel(item)}</span>
-      </div>
-      {item.note ? <p className="mt-2 text-sm text-slate-400">{item.note}</p> : null}
-      <div className="mt-3 grid grid-cols-2 gap-2">
-        <button
-          type="button"
-          onClick={onEdit}
-          className="flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl bg-white/10 text-sm text-slate-200 active:bg-white/15"
-        >
-          <Pencil size={16} /> Изменить
-        </button>
-        <button
-          type="button"
-          onClick={onDelete}
-          className="flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl bg-red-500/10 text-sm text-red-400 active:bg-red-500/20"
-        >
-          <Trash2 size={16} /> Удалить
-        </button>
-      </div>
-    </article>
-  );
-}
 
 function Field({ label, children }) {
   return (

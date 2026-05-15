@@ -991,7 +991,85 @@ if (saved) {
                   ))}
                   {!visibleTransactions.length && <EmptyState text="Операций по выбранным фильтрам пока нет." />}
                 </div>
+{/* Мобильные карточки операций */}
+<div className="space-y-3 md:hidden">
+  {visibleTransactions.map((item) => (
+    <div
+      key={item.id}
+      className="rounded-2xl border border-white/10 bg-slate-900/70 p-4"
+    >
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <MemberAvatar
+            name={getMemberName(item.memberId)}
+            photo={getMemberPhoto(item.memberId)}
+            size="sm"
+          />
+          <div>
+            <div className="font-bold">{getMemberName(item.memberId)}</div>
+            <div className="text-xs text-slate-400">{item.date}</div>
+          </div>
+        </div>
 
+        <span
+          className={`rounded-full px-3 py-1 text-xs font-bold ${
+            item.type === "income"
+              ? "bg-green-500/15 text-green-400"
+              : "bg-red-500/15 text-red-400"
+          }`}
+        >
+          {item.type === "income" ? "Доход" : "Расход"}
+        </span>
+      </div>
+
+      <div className="space-y-2 text-sm">
+        <div className="flex justify-between gap-3">
+          <span className="text-slate-400">Статья</span>
+          <span className="text-right font-medium">{getCategoryLabel(item)}</span>
+        </div>
+
+        <div className="flex justify-between gap-3">
+          <span className="text-slate-400">Комментарий</span>
+          <span className="text-right">{item.note || "—"}</span>
+        </div>
+
+        <div className="flex justify-between gap-3 border-t border-white/10 pt-3">
+          <span className="text-slate-400">Сумма</span>
+          <span
+            className={`text-lg font-black ${
+              item.type === "income" ? "text-green-400" : "text-red-400"
+            }`}
+          >
+            {item.type === "income" ? "+" : "-"}
+            {currency.format(item.amount)}
+          </span>
+        </div>
+      </div>
+
+      <div className="mt-4 grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          onClick={() => handleEdit(item)}
+          className="rounded-xl bg-white/10 px-3 py-2 text-sm text-slate-200 hover:bg-white/15"
+        >
+          Редактировать
+        </button>
+
+        <button
+          type="button"
+          onClick={() => handleDelete(item.id)}
+          className="rounded-xl bg-red-500/15 px-3 py-2 text-sm text-red-300 hover:bg-red-500/20"
+        >
+          Удалить
+        </button>
+      </div>
+    </div>
+  ))}
+
+  {!visibleTransactions.length && (
+    <EmptyState text="Операций по выбранным фильтрам пока нет." />
+  )}
+</div>
                 <div className="hidden overflow-x-auto rounded-2xl border border-white/10 md:block">
                   <table className="w-full border-collapse text-left text-sm">
                     <thead className="bg-slate-900 text-slate-300">

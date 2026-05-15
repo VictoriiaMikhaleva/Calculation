@@ -1072,7 +1072,7 @@ if (saved) {
 </div>
 
 {/* Таблица для планшета и компьютера */}
-<div className="hidden overflow-x-auto rounded-2xl border border-white/10 md:block">
+<div className="history-desktop-table overflow-x-auto rounded-2xl border border-white/10">
   <table className="w-full min-w-[900px] border-collapse text-left text-sm">
     <thead className="bg-slate-900 text-slate-300">
       <tr>

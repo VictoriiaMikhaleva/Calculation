@@ -1070,55 +1070,95 @@ if (saved) {
     <EmptyState text="Операций по выбранным фильтрам пока нет." />
   )}
 </div>
-                <div className="hidden overflow-x-auto rounded-2xl border border-white/10 md:block">
-                  <table className="w-full border-collapse text-left text-sm">
-                    <thead className="bg-slate-900 text-slate-300">
-                      <tr>
-                        <th className="p-3">Дата</th>
-                        <th className="p-3">Тип</th>
-                        <th className="p-3">Участник</th>
-                        <th className="p-3">Статья</th>
-                        <th className="p-3">Комментарий</th>
-                        <th className="p-3 text-right">Сумма</th>
-                        <th className="p-3 text-right">Действия</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {visibleTransactions.map((item) => (
-                        <tr key={item.id} className="border-t border-white/10 hover:bg-white/5">
-                          <td className="p-3 text-slate-300">{item.date}</td>
-                          <td className="p-3">
-                            <span className={`rounded-full px-3 py-1 text-xs font-bold ${item.type === "income" ? "bg-green-500/15 text-green-400" : "bg-red-500/15 text-red-400"}`}>
-                              {item.type === "income" ? "Доход" : "Расход"}
-                            </span>
-                          </td>
-                          <td className="p-3">
-                            <div className="flex items-center gap-3">
-                              <MemberAvatar
-                                name={getMemberName(item.memberId)}
-                                photo={getMemberPhoto(item.memberId)}
-                                size="sm"
-                              />
-                              <span>{getMemberName(item.memberId)}</span>
-                            </div>
-                          </td>
-                          <td className="p-3">{getCategoryLabel(item)}</td>
-                          <td className="p-3 text-slate-400">{item.note || "—"}</td>
-                          <td className={`p-3 text-right font-bold ${item.type === "income" ? "text-green-400" : "text-red-400"}`}>
-                            {item.type === "income" ? "+" : "-"}{currency.format(item.amount)}
-                          </td>
-                          <td className="p-3">
-                            <div className="flex justify-end gap-2">
-                              <button type="button" onClick={() => handleEdit(item)} className="rounded-xl p-2 text-slate-400 hover:bg-white/10 hover:text-white" title="Редактировать"><Pencil size={16} /></button>
-                              <button type="button" onClick={() => handleDelete(item.id)} className="rounded-xl p-2 text-slate-400 hover:bg-red-500/15 hover:text-red-400" title="Удалить"><Trash2 size={16} /></button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  {!visibleTransactions.length && <EmptyState text="Операций по выбранным фильтрам пока нет." />}
-                </div>
+                {/* Таблица для планшета и компьютера */}
+<div className="hidden overflow-x-auto rounded-2xl border border-white/10 md:block">
+  <table className="w-full min-w-[900px] border-collapse text-left text-sm">
+    <thead className="bg-slate-900 text-slate-300">
+      <tr>
+        <th className="p-3">Дата</th>
+        <th className="p-3">Тип</th>
+        <th className="p-3">Участник</th>
+        <th className="p-3">Статья</th>
+        <th className="p-3">Комментарий</th>
+        <th className="p-3 text-right">Сумма</th>
+        <th className="p-3 text-right">Действия</th>
+      </tr>
+    </thead>
+
+    <tbody>
+      {visibleTransactions.map((item) => (
+        <tr
+          key={item.id}
+          className="border-t border-white/10 hover:bg-white/5"
+        >
+          <td className="p-3 text-slate-300">{item.date}</td>
+
+          <td className="p-3">
+            <span
+              className={`rounded-full px-3 py-1 text-xs font-bold ${
+                item.type === "income"
+                  ? "bg-green-500/15 text-green-400"
+                  : "bg-red-500/15 text-red-400"
+              }`}
+            >
+              {item.type === "income" ? "Доход" : "Расход"}
+            </span>
+          </td>
+
+          <td className="p-3">
+            <div className="flex items-center gap-3">
+              <MemberAvatar
+                name={getMemberName(item.memberId)}
+                photo={getMemberPhoto(item.memberId)}
+                size="sm"
+              />
+              <span>{getMemberName(item.memberId)}</span>
+            </div>
+          </td>
+
+          <td className="p-3">{getCategoryLabel(item)}</td>
+
+          <td className="p-3 text-slate-400">{item.note || "—"}</td>
+
+          <td
+            className={`p-3 text-right font-bold ${
+              item.type === "income" ? "text-green-400" : "text-red-400"
+            }`}
+          >
+            {item.type === "income" ? "+" : "-"}
+            {currency.format(item.amount)}
+          </td>
+
+          <td className="p-3">
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => handleEdit(item)}
+                className="rounded-xl p-2 text-slate-400 hover:bg-white/10 hover:text-white"
+                title="Редактировать"
+              >
+                <Pencil size={16} />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleDelete(item.id)}
+                className="rounded-xl p-2 text-slate-400 hover:bg-red-500/15 hover:text-red-400"
+                title="Удалить"
+              >
+                <Trash2 size={16} />
+              </button>
+            </div>
+          </td>
+        </tr>
+      ))}
+    </tbody>
+  </table>
+
+  {!visibleTransactions.length && (
+    <EmptyState text="Операций по выбранным фильтрам пока нет." />
+  )}
+</div>
               </div>
             )}
 

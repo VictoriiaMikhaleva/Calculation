@@ -937,7 +937,7 @@ if (saved) {
                   </div>
                 </div>
 
-                <div className="space-y-3 md:hidden">
+              <div className="history-mobile-cards space-y-3">
                   {visibleTransactions.map((item) => (
                     <article
                       key={item.id}

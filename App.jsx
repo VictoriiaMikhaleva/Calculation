@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useRef, useState } from "react";
+﻿import React, { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import {
   Area,
   AreaChart,
@@ -162,6 +162,46 @@ function sumAmounts(items, condition) {
   return items.reduce((sum, item) => (condition(item) ? sum + Number(item.amount || 0) : sum), 0);
 }
 
+function formatDisplayDate(dateStr) {
+  const [year, month, day] = String(dateStr || "").split("-");
+  if (!year || !month || !day) return dateStr;
+  return `${day}.${month}.${year}`;
+}
+
+function groupTransactionsByDay(items) {
+  const groups = [];
+
+  for (const item of items) {
+    const previous = groups[groups.length - 1];
+    if (previous && previous.date === item.date) {
+      previous.items.push(item);
+    } else {
+      groups.push({ date: item.date, items: [item] });
+    }
+  }
+
+  return groups.map((group) => ({
+    ...group,
+    income: sumAmounts(group.items, (entry) => entry.type === "income"),
+    expense: sumAmounts(group.items, (entry) => entry.type === "expense"),
+  }));
+}
+
+function formatDayTotal(group) {
+  const parts = [];
+
+  if (group.income > 0) parts.push(`доходы ${currency.format(group.income)}`);
+  if (group.expense > 0) parts.push(`расходы ${currency.format(group.expense)}`);
+
+  const net = group.income - group.expense;
+  if (group.income > 0 && group.expense > 0) {
+    parts.push(`итого ${currency.format(net)}`);
+  }
+
+  if (!parts.length) return "0 ₽";
+  return parts.join(" · ");
+}
+
 function useMediaQuery(query) {
   const [matches, setMatches] = useState(() =>
     typeof window !== "undefined" ? window.matchMedia(query).matches : false
@@ -215,8 +255,10 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState("");
   const [editingId, setEditingId] = useState(null);
   const [activeTab, setActiveTab] = useState("dashboard");
+  const mainPanelRef = useRef(null);
   const isCompact = useMediaQuery("(max-width: 639px)");
   const chartHeight = isCompact ? 240 : 320;
+  const pieChartHeight = isCompact ? 320 : 400;
 
   const [form, setForm] = useState({
     type: "expense",
@@ -368,6 +410,8 @@ export default function App() {
       .sort((a, b) => new Date(b.date) - new Date(a.date));
   }, [transactions, filterMember, filterType, filterMonth, searchQuery]);
 
+  const historyDayGroups = useMemo(() => groupTransactionsByDay(visibleTransactions), [visibleTransactions]);
+
   const totalIncome = useMemo(() => sumAmounts(transactions, (item) => item.type === "income"), [transactions]);
   const totalExpense = useMemo(() => sumAmounts(transactions, (item) => item.type === "expense"), [transactions]);
   const balance = totalIncome - totalExpense;
@@ -456,6 +500,17 @@ export default function App() {
   }, [savingRate, totalIncome, biggestExpense, limitsData, balance]);
 
   const selectedMemberPreview = getMemberById(form.memberId);
+
+  function openStatSection(tab, options = {}) {
+    setActiveTab(tab);
+    if (options.filterType !== undefined) setFilterType(options.filterType);
+    if (options.filterMember !== undefined) setFilterMember(options.filterMember);
+    if (options.filterMonth !== undefined) setFilterMonth(options.filterMonth);
+
+    requestAnimationFrame(() => {
+      mainPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
 
   function resetForm(type = form.type) {
     setForm({
@@ -684,19 +739,44 @@ if (saved) {
         </section>
 
         <section className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-2 xl:grid-cols-5">
-          <StatCard icon={<TrendingUp />} label="Доходы" value={currency.format(totalIncome)} tone="green" />
-          <StatCard icon={<TrendingDown />} label="Расходы" value={currency.format(totalExpense)} tone="red" />
-          <StatCard icon={<Wallet />} label="Остаток" value={currency.format(balance)} tone={balance >= 0 ? "green" : "red"} />
-          <StatCard icon={<PiggyBank />} label="Средний расход" value={currency.format(averageExpense)} tone="slate" />
+          <StatCard
+            icon={<TrendingUp />}
+            label="Доходы"
+            value={currency.format(totalIncome)}
+            tone="green"
+            onClick={() => openStatSection("history", { filterType: "income" })}
+          />
+          <StatCard
+            icon={<TrendingDown />}
+            label="Расходы"
+            value={currency.format(totalExpense)}
+            tone="red"
+            onClick={() => openStatSection("history", { filterType: "expense" })}
+          />
+          <StatCard
+            icon={<Wallet />}
+            label="Остаток"
+            value={currency.format(balance)}
+            tone={balance >= 0 ? "green" : "red"}
+            onClick={() => openStatSection("dashboard")}
+          />
+          <StatCard
+            icon={<PiggyBank />}
+            label="Средний расход"
+            value={currency.format(averageExpense)}
+            tone="slate"
+            onClick={() => openStatSection("history", { filterType: "expense" })}
+          />
           <StatCard
             icon={<Target />}
             label="Главная статья"
             value={biggestExpense ? `${biggestExpense.name}: ${currency.format(biggestExpense.value)}` : "Пока нет"}
             tone="slate"
+            onClick={() => openStatSection("dashboard")}
           />
         </section>
 
-        <main className="grid gap-4 sm:gap-6 lg:grid-cols-[minmax(0,430px)_1fr]">
+        <main ref={mainPanelRef} className="grid gap-4 scroll-mt-4 sm:gap-6 lg:grid-cols-[minmax(0,430px)_1fr]">
           <section className="rounded-2xl border border-white/10 bg-white/5 p-4 shadow-xl sm:rounded-3xl sm:p-5">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
               <h2 className="text-xl font-bold sm:text-2xl">{editingId ? "Редактировать операцию" : "Добавить операцию"}</h2>
@@ -809,22 +889,36 @@ if (saved) {
                 <div className="grid gap-6 xl:grid-cols-2">
                   <ChartCard title="На что уходит больше денег">
                     {expensesByCategory.length ? (
-                      <ResponsiveContainer width="100%" height={chartHeight}>
-                        <PieChart>
-                          <Pie
-                            data={expensesByCategory}
-                            dataKey="value"
-                            nameKey="name"
-                            outerRadius={isCompact ? 72 : 112}
-                            label={isCompact ? false : ({ name, percent }) => `${name} ${Math.round(percent * 100)}%`}
-                          >
-                            {expensesByCategory.map((_, index) => <Cell key={index} fill={PIE_COLORS[index % PIE_COLORS.length]} />)}
-                          </Pie>
-                          <Tooltip formatter={(value) => currency.format(value)} />
-                          {isCompact && <Legend wrapperStyle={{ fontSize: 12 }} />}
-                        </PieChart>
-                      </ResponsiveContainer>
-                    ) : <EmptyState text="Добавьте расходы, чтобы увидеть диаграмму." />}
+                      <div className="px-2 py-4 sm:px-6 sm:py-6">
+                        <ResponsiveContainer width="100%" height={pieChartHeight}>
+                          <PieChart margin={{ top: 32, right: 48, bottom: 32, left: 48 }}>
+                            <Pie
+                              data={expensesByCategory}
+                              dataKey="value"
+                              nameKey="name"
+                              cx="50%"
+                              cy="46%"
+                              outerRadius={isCompact ? "52%" : "58%"}
+                              label={({ percent }) => `${Math.round(percent * 100)}%`}
+                              labelLine={{ stroke: "#94a3b8", strokeWidth: 1 }}
+                            >
+                              {expensesByCategory.map((_, index) => (
+                                <Cell key={index} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                              ))}
+                            </Pie>
+                            <Tooltip formatter={(value) => currency.format(value)} />
+                            <Legend
+                              verticalAlign="bottom"
+                              layout="horizontal"
+                              align="center"
+                              wrapperStyle={{ paddingTop: 20, fontSize: isCompact ? 11 : 12 }}
+                            />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </div>
+                    ) : (
+                      <EmptyState text="Добавьте расходы, чтобы увидеть диаграмму." />
+                    )}
                   </ChartCard>
 
                   <ChartCard title="Доходы и расходы по участникам">
@@ -937,229 +1031,151 @@ if (saved) {
                   </div>
                 </div>
 
-              <div className="history-mobile-cards space-y-3">
-                  {visibleTransactions.map((item) => (
-                    <article
-                      key={item.id}
-                      className="space-y-3 rounded-2xl border border-white/10 bg-slate-900/70 p-4"
-                    >
-                      <p className="text-sm text-slate-400">{item.date}</p>
-                      <span
-                        className={`inline-block rounded-full px-3 py-1 text-xs font-bold ${
-                          item.type === "income" ? "bg-green-500/15 text-green-400" : "bg-red-500/15 text-red-400"
-                        }`}
-                      >
-                        {item.type === "income" ? "Доход" : "Расход"}
-                      </span>
-                      <div className="flex items-center gap-3">
-                        <MemberAvatar
-                          name={getMemberName(item.memberId)}
-                          photo={getMemberPhoto(item.memberId)}
-                          size="sm"
-                        />
-                        <span className="font-medium">{getMemberName(item.memberId)}</span>
-                      </div>
-                      <p className="text-sm text-slate-200">{getCategoryLabel(item)}</p>
-                      <p className="text-sm text-slate-400">{item.note || "—"}</p>
-                      <p
-                        className={`text-lg font-bold ${
-                          item.type === "income" ? "text-green-400" : "text-red-400"
-                        }`}
-                      >
-                        {item.type === "income" ? "+" : "-"}
-                        {currency.format(item.amount)}
-                      </p>
-                      <div className="grid grid-cols-2 gap-2 pt-1">
-                        <button
-                          type="button"
-                          onClick={() => handleEdit(item)}
-                          className="flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl bg-white/10 text-sm text-slate-200 active:bg-white/15"
-                          title="Редактировать"
+                <div className="space-y-3 md:hidden">
+                  {historyDayGroups.map((group) => (
+                    <div key={group.date} className="space-y-3">
+                      <p className="text-sm font-semibold text-slate-300">{formatDisplayDate(group.date)}</p>
+                      {group.items.map((item) => (
+                        <article
+                          key={item.id}
+                          className="space-y-3 rounded-2xl border border-white/10 bg-slate-900/70 p-4"
                         >
-                          <Pencil size={16} /> Изменить
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDelete(item.id)}
-                          className="flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl bg-red-500/10 text-sm text-red-400 active:bg-red-500/20"
-                          title="Удалить"
-                        >
-                          <Trash2 size={16} /> Удалить
-                        </button>
+                          <span
+                            className={`inline-block rounded-full px-3 py-1 text-xs font-bold ${
+                              item.type === "income" ? "bg-green-500/15 text-green-400" : "bg-red-500/15 text-red-400"
+                            }`}
+                          >
+                            {item.type === "income" ? "Доход" : "Расход"}
+                          </span>
+                          <div className="flex items-center gap-3">
+                            <MemberAvatar
+                              name={getMemberName(item.memberId)}
+                              photo={getMemberPhoto(item.memberId)}
+                              size="sm"
+                            />
+                            <span className="font-medium">{getMemberName(item.memberId)}</span>
+                          </div>
+                          <p className="text-sm text-slate-200">{getCategoryLabel(item)}</p>
+                          <p className="text-sm text-slate-400">{item.note || "—"}</p>
+                          <p
+                            className={`text-lg font-bold ${
+                              item.type === "income" ? "text-green-400" : "text-red-400"
+                            }`}
+                          >
+                            {item.type === "income" ? "+" : "-"}
+                            {currency.format(item.amount)}
+                          </p>
+                          <div className="grid grid-cols-2 gap-2 pt-1">
+                            <button
+                              type="button"
+                              onClick={() => handleEdit(item)}
+                              className="flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl bg-white/10 text-sm text-slate-200 active:bg-white/15"
+                              title="Редактировать"
+                            >
+                              <Pencil size={16} /> Изменить
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDelete(item.id)}
+                              className="flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl bg-red-500/10 text-sm text-red-400 active:bg-red-500/20"
+                              title="Удалить"
+                            >
+                              <Trash2 size={16} /> Удалить
+                            </button>
+                          </div>
+                        </article>
+                      ))}
+                      <div className="rounded-xl border border-white/15 bg-slate-800/80 px-4 py-3 text-sm font-semibold text-slate-200">
+                        <span className="text-slate-400">Всего за день: </span>
+                        {formatDayTotal(group)}
                       </div>
-                    </article>
+                    </div>
                   ))}
                   {!visibleTransactions.length && <EmptyState text="Операций по выбранным фильтрам пока нет." />}
                 </div>
-{/* Мобильные карточки операций */}
-<div className="space-y-3 md:hidden">
-  {visibleTransactions.map((item) => (
-    <div
-      key={item.id}
-      className="rounded-2xl border border-white/10 bg-slate-900/70 p-4"
-    >
-      <div className="mb-3 flex items-start justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <MemberAvatar
-            name={getMemberName(item.memberId)}
-            photo={getMemberPhoto(item.memberId)}
-            size="sm"
-          />
-          <div>
-            <div className="font-bold">{getMemberName(item.memberId)}</div>
-            <div className="text-xs text-slate-400">{item.date}</div>
-          </div>
-        </div>
 
-        <span
-          className={`rounded-full px-3 py-1 text-xs font-bold ${
-            item.type === "income"
-              ? "bg-green-500/15 text-green-400"
-              : "bg-red-500/15 text-red-400"
-          }`}
-        >
-          {item.type === "income" ? "Доход" : "Расход"}
-        </span>
-      </div>
-
-      <div className="space-y-2 text-sm">
-        <div className="flex justify-between gap-3">
-          <span className="text-slate-400">Статья</span>
-          <span className="text-right font-medium">{getCategoryLabel(item)}</span>
-        </div>
-
-        <div className="flex justify-between gap-3">
-          <span className="text-slate-400">Комментарий</span>
-          <span className="text-right">{item.note || "—"}</span>
-        </div>
-
-        <div className="flex justify-between gap-3 border-t border-white/10 pt-3">
-          <span className="text-slate-400">Сумма</span>
-          <span
-            className={`text-lg font-black ${
-              item.type === "income" ? "text-green-400" : "text-red-400"
-            }`}
-          >
-            {item.type === "income" ? "+" : "-"}
-            {currency.format(item.amount)}
-          </span>
-        </div>
-      </div>
-
-      <div className="mt-4 grid grid-cols-2 gap-2">
-        <button
-          type="button"
-          onClick={() => handleEdit(item)}
-          className="rounded-xl bg-white/10 px-3 py-2 text-sm text-slate-200 hover:bg-white/15"
-        >
-          Редактировать
-        </button>
-
-        <button
-          type="button"
-          onClick={() => handleDelete(item.id)}
-          className="rounded-xl bg-red-500/15 px-3 py-2 text-sm text-red-300 hover:bg-red-500/20"
-        >
-          Удалить
-        </button>
-      </div>
-    </div>
-  ))}
-
-  {!visibleTransactions.length && (
-    <EmptyState text="Операций по выбранным фильтрам пока нет." />
-  )}
-</div>
-
-{/* Таблица для планшета и компьютера */}
-<div className="history-desktop-table overflow-x-auto rounded-2xl border border-white/10">
-  <table className="w-full min-w-[900px] border-collapse text-left text-sm">
-    <thead className="bg-slate-900 text-slate-300">
-      <tr>
-        <th className="p-3">Дата</th>
-        <th className="p-3">Тип</th>
-        <th className="p-3">Участник</th>
-        <th className="p-3">Статья</th>
-        <th className="p-3">Комментарий</th>
-        <th className="p-3 text-right">Сумма</th>
-        <th className="p-3 text-right">Действия</th>
-      </tr>
-    </thead>
-
-    <tbody>
-      {visibleTransactions.map((item) => (
-        <tr
-          key={item.id}
-          className="border-t border-white/10 hover:bg-white/5"
-        >
-          <td className="p-3 text-slate-300">{item.date}</td>
-
-          <td className="p-3">
-            <span
-              className={`rounded-full px-3 py-1 text-xs font-bold ${
-                item.type === "income"
-                  ? "bg-green-500/15 text-green-400"
-                  : "bg-red-500/15 text-red-400"
-              }`}
-            >
-              {item.type === "income" ? "Доход" : "Расход"}
-            </span>
-          </td>
-
-          <td className="p-3">
-            <div className="flex items-center gap-3">
-              <MemberAvatar
-                name={getMemberName(item.memberId)}
-                photo={getMemberPhoto(item.memberId)}
-                size="sm"
-              />
-              <span>{getMemberName(item.memberId)}</span>
-            </div>
-          </td>
-
-          <td className="p-3">{getCategoryLabel(item)}</td>
-
-          <td className="p-3 text-slate-400">{item.note || "—"}</td>
-
-          <td
-            className={`p-3 text-right font-bold ${
-              item.type === "income" ? "text-green-400" : "text-red-400"
-            }`}
-          >
-            {item.type === "income" ? "+" : "-"}
-            {currency.format(item.amount)}
-          </td>
-
-          <td className="p-3">
-            <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => handleEdit(item)}
-                className="rounded-xl p-2 text-slate-400 hover:bg-white/10 hover:text-white"
-                title="Редактировать"
-              >
-                <Pencil size={16} />
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleDelete(item.id)}
-                className="rounded-xl p-2 text-slate-400 hover:bg-red-500/15 hover:text-red-400"
-                title="Удалить"
-              >
-                <Trash2 size={16} />
-              </button>
-            </div>
-          </td>
-        </tr>
-      ))}
-    </tbody>
-  </table>
-
-  {!visibleTransactions.length && (
-    <EmptyState text="Операций по выбранным фильтрам пока нет." />
-  )}
-</div>
+                <div className="hidden overflow-x-auto rounded-2xl border border-white/10 md:block">
+                  <table className="w-full min-w-[900px] border-collapse text-left text-sm">
+                    <thead className="bg-slate-900 text-slate-300">
+                      <tr>
+                        <th className="p-3">Дата</th>
+                        <th className="p-3">Тип</th>
+                        <th className="p-3">Участник</th>
+                        <th className="p-3">Статья</th>
+                        <th className="p-3">Комментарий</th>
+                        <th className="p-3 text-right">Сумма</th>
+                        <th className="p-3 text-right">Действия</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {historyDayGroups.map((group) => (
+                        <Fragment key={group.date}>
+                          {group.items.map((item) => (
+                            <tr key={item.id} className="border-t border-white/10 hover:bg-white/5">
+                              <td className="p-3 text-slate-300">{item.date}</td>
+                              <td className="p-3">
+                                <span
+                                  className={`rounded-full px-3 py-1 text-xs font-bold ${
+                                    item.type === "income" ? "bg-green-500/15 text-green-400" : "bg-red-500/15 text-red-400"
+                                  }`}
+                                >
+                                  {item.type === "income" ? "Доход" : "Расход"}
+                                </span>
+                              </td>
+                              <td className="p-3">
+                                <div className="flex items-center gap-3">
+                                  <MemberAvatar
+                                    name={getMemberName(item.memberId)}
+                                    photo={getMemberPhoto(item.memberId)}
+                                    size="sm"
+                                  />
+                                  <span>{getMemberName(item.memberId)}</span>
+                                </div>
+                              </td>
+                              <td className="p-3">{getCategoryLabel(item)}</td>
+                              <td className="p-3 text-slate-400">{item.note || "—"}</td>
+                              <td
+                                className={`p-3 text-right font-bold ${
+                                  item.type === "income" ? "text-green-400" : "text-red-400"
+                                }`}
+                              >
+                                {item.type === "income" ? "+" : "-"}
+                                {currency.format(item.amount)}
+                              </td>
+                              <td className="p-3">
+                                <div className="flex justify-end gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleEdit(item)}
+                                    className="rounded-xl p-2 text-slate-400 hover:bg-white/10 hover:text-white"
+                                    title="Редактировать"
+                                  >
+                                    <Pencil size={16} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDelete(item.id)}
+                                    className="rounded-xl p-2 text-slate-400 hover:bg-red-500/15 hover:text-red-400"
+                                    title="Удалить"
+                                  >
+                                    <Trash2 size={16} />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                          <tr className="border-t border-white/20 bg-slate-900/80">
+                            <td colSpan={7} className="p-3 text-sm font-semibold text-slate-200">
+                              <span className="text-slate-400">Всего за день: </span>
+                              {formatDayTotal(group)}
+                            </td>
+                          </tr>
+                        </Fragment>
+                      ))}
+                    </tbody>
+                  </table>
+                  {!visibleTransactions.length && <EmptyState text="Операций по выбранным фильтрам пока нет." />}
+                </div>
               </div>
             )}
 
@@ -1224,23 +1240,6 @@ if (saved) {
           background: rgba(255,255,255,0.12);
           color: white;
         }
-        .history-mobile-cards {
-  display: none;
-}
-
-.history-desktop-table {
-  display: block;
-}
-
-@media (max-width: 767px) {
-  .history-mobile-cards {
-    display: block !important;
-  }
-
-  .history-desktop-table {
-    display: none !important;
-  }
-}
       `}</style>
     </div>
   );
@@ -1271,15 +1270,29 @@ function TabButton({ active, onClick, icon, label, compact = false }) {
   );
 }
 
-function StatCard({ icon, label, value, tone }) {
+function StatCard({ icon, label, value, tone, onClick }) {
   const toneClass = {
     green: "border-green-500/20 bg-green-500/10 text-green-400",
     red: "border-red-500/20 bg-red-500/10 text-red-400",
     slate: "border-white/10 bg-white/5 text-slate-200",
   }[tone];
 
+  const className = `w-full rounded-2xl border p-4 text-left shadow-xl transition sm:rounded-3xl sm:p-5 ${toneClass} ${
+    onClick ? "cursor-pointer touch-manipulation hover:-translate-y-0.5 hover:brightness-110 active:scale-[0.99]" : ""
+  }`;
+
+  if (onClick) {
+    return (
+      <button type="button" onClick={onClick} className={className}>
+        <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-2xl bg-white/10 sm:mb-3 sm:h-11 sm:w-11">{icon}</div>
+        <p className="text-xs text-slate-300 sm:text-sm">{label}</p>
+        <p className="mt-1 break-words text-base font-black leading-snug text-white sm:text-xl">{value}</p>
+      </button>
+    );
+  }
+
   return (
-    <div className={`rounded-2xl border p-4 shadow-xl sm:rounded-3xl sm:p-5 ${toneClass}`}>
+    <div className={className}>
       <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-2xl bg-white/10 sm:mb-3 sm:h-11 sm:w-11">{icon}</div>
       <p className="text-xs text-slate-300 sm:text-sm">{label}</p>
       <p className="mt-1 break-words text-base font-black leading-snug text-white sm:text-xl">{value}</p>

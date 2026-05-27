@@ -1197,6 +1197,18 @@ if (saved) {
             )}
           </section>
         </main>
+
+        <footer className="mt-2 border-t border-white/10 pb-2 pt-3 text-center text-xs text-slate-400 sm:pb-0 sm:text-sm">
+          Создано Викторией Михалевой ·{" "}
+          <a
+            href="https://www.content-system.ru/"
+            target="_blank"
+            rel="noreferrer"
+            className="text-slate-300 underline decoration-white/30 underline-offset-2 transition hover:text-white"
+          >
+            контент, ИИ и цифровые проекты
+          </a>
+        </footer>
       </div>
 
       <style>{`

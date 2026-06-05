@@ -67,6 +67,7 @@
       font: inherit;
     }
     .mem-btn:hover { transform: translateY(-2px); background: #0f172a; }
+    .mem-btn.selected { border-color: rgba(96,165,250,.6); box-shadow: 0 0 0 2px rgba(96,165,250,.3); }
     .mem-row { display: flex; align-items: center; gap: 1rem; }
     .avatar {
       flex-shrink: 0; width: 5rem; height: 5rem; border-radius: 9999px;
@@ -691,8 +692,12 @@
         return i.memberId === member.id && i.type === "expense";
       });
       memberCards +=
-        '<button type="button" class="mem-btn" data-filter-member="' +
+        '<button type="button" class="mem-btn' +
+        (state.form.memberId === member.id && !state.editingId ? " selected" : "") +
+        '" data-select-member="' +
         escapeHtml(member.id) +
+        '" title="Добавить операцию для ' +
+        escapeHtml(member.name) +
         '">' +
         '<div class="mem-row">' +
         memberAvatarHtml(member.id, "") +
@@ -767,7 +772,7 @@
       savingRate +
       "%</p></div></div></header>" +
 
-      '<section class="card"><h2>👪 Участники семьи</h2><div class="members">' +
+      '<section class="card"><h2>👪 Участники семьи</h2><p class="muted" style="margin:-.5rem 0 1rem">Нажмите на участника, чтобы добавить доход или расход</p><div class="members">' +
       memberCards +
       "</div></section>" +
 
@@ -965,11 +970,19 @@
       });
     });
 
-    document.querySelectorAll("[data-filter-member]").forEach(function (btn) {
+    document.querySelectorAll("[data-select-member]").forEach(function (btn) {
       btn.addEventListener("click", function () {
-        state.filterMember = btn.getAttribute("data-filter-member");
-        state.activeTab = "history";
+        state.editingId = null;
+        state.form.memberId = btn.getAttribute("data-select-member");
+        state.form.amount = "";
+        state.form.note = "";
+        state.form.date = today();
+        if (state.form.category === "Своя статья") state.form.customCategory = "";
         render();
+        var formEl = document.getElementById("main-form");
+        if (formEl) formEl.scrollIntoView({ behavior: "smooth", block: "start" });
+        var amountInput = document.querySelector('#main-form input[name="amount"]');
+        if (amountInput) amountInput.focus();
       });
     });
 

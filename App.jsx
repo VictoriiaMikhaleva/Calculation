@@ -256,6 +256,7 @@ export default function App() {
   const [editingId, setEditingId] = useState(null);
   const [activeTab, setActiveTab] = useState("dashboard");
   const mainPanelRef = useRef(null);
+  const amountInputRef = useRef(null);
   const isCompact = useMediaQuery("(max-width: 639px)");
   const chartHeight = isCompact ? 240 : 320;
   const pieChartHeight = isCompact ? 320 : 400;
@@ -512,6 +513,23 @@ export default function App() {
     });
   }
 
+  function handleMemberClick(memberId) {
+    setEditingId(null);
+    setForm((prev) => ({
+      ...prev,
+      memberId,
+      amount: "",
+      note: "",
+      date: today(),
+      customCategory: prev.category === "Своя статья" ? "" : prev.customCategory,
+    }));
+
+    requestAnimationFrame(() => {
+      mainPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      amountInputRef.current?.focus();
+    });
+  }
+
   function resetForm(type = form.type) {
     setForm({
       type,
@@ -707,9 +725,12 @@ if (saved) {
         </header>
 
         <section className="rounded-2xl border border-white/10 bg-white/5 p-4 shadow-xl sm:rounded-3xl sm:p-5">
-          <div className="mb-3 flex items-center gap-2 sm:mb-4">
-            <Users size={20} />
-            <h2 className="text-xl font-bold sm:text-2xl">Участники семьи</h2>
+          <div className="mb-3 sm:mb-4">
+            <div className="flex items-center gap-2">
+              <Users size={20} />
+              <h2 className="text-xl font-bold sm:text-2xl">Участники семьи</h2>
+            </div>
+            <p className="mt-1 text-sm text-slate-400">Нажмите на участника, чтобы добавить доход или расход</p>
           </div>
 
           <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
@@ -717,12 +738,19 @@ if (saved) {
               const income = sumAmounts(transactions, (item) => item.memberId === member.id && item.type === "income");
               const expense = sumAmounts(transactions, (item) => item.memberId === member.id && item.type === "expense");
 
+              const isSelected = form.memberId === member.id && !editingId;
+
               return (
                 <button
                   key={member.id}
                   type="button"
-                  onClick={() => setFilterMember(member.id)}
-                  className="rounded-2xl border border-white/10 bg-slate-900/70 p-3 text-left transition active:scale-[0.98] sm:p-4 sm:hover:-translate-y-1 sm:hover:bg-slate-900"
+                  onClick={() => handleMemberClick(member.id)}
+                  title={`Добавить операцию для ${member.name}`}
+                  className={`rounded-2xl border bg-slate-900/70 p-3 text-left transition active:scale-[0.98] sm:p-4 sm:hover:-translate-y-1 sm:hover:bg-slate-900 ${
+                    isSelected
+                      ? "border-blue-400/60 ring-2 ring-blue-400/30"
+                      : "border-white/10"
+                  }`}
                 >
                   <div className="flex flex-col items-center gap-2 text-center sm:flex-row sm:items-center sm:gap-4 sm:text-left">
                     <MemberAvatar name={member.name} photo={member.photo} size={isCompact ? "md" : "lg"} />
@@ -842,7 +870,7 @@ if (saved) {
               )}
 
               <Field label="Сумма">
-                <input className="input" type="number" min="0" step="1" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} placeholder="0" />
+                <input ref={amountInputRef} className="input" type="number" min="0" step="1" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} placeholder="0" />
               </Field>
 
               <Field label="Дата">

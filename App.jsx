@@ -256,6 +256,7 @@ export default function App() {
   const [editingId, setEditingId] = useState(null);
   const [activeTab, setActiveTab] = useState("dashboard");
   const mainPanelRef = useRef(null);
+  const formPanelRef = useRef(null);
   const amountInputRef = useRef(null);
   const isCompact = useMediaQuery("(max-width: 639px)");
   const chartHeight = isCompact ? 240 : 320;
@@ -525,8 +526,8 @@ export default function App() {
     }));
 
     requestAnimationFrame(() => {
-      mainPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-      amountInputRef.current?.focus();
+      formPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      amountInputRef.current?.focus({ preventScroll: true });
     });
   }
 
@@ -805,9 +806,15 @@ if (saved) {
         </section>
 
         <main ref={mainPanelRef} className="grid gap-4 scroll-mt-4 sm:gap-6 lg:grid-cols-[minmax(0,430px)_1fr]">
-          <section className="rounded-2xl border border-white/10 bg-white/5 p-4 shadow-xl sm:rounded-3xl sm:p-5">
+          <section ref={formPanelRef} className="scroll-mt-4 rounded-2xl border border-white/10 bg-white/5 p-4 shadow-xl sm:rounded-3xl sm:p-5">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-              <h2 className="text-xl font-bold sm:text-2xl">{editingId ? "Редактировать операцию" : "Добавить операцию"}</h2>
+              <h2 className="text-xl font-bold sm:text-2xl">
+                {editingId
+                  ? "Редактировать операцию"
+                  : form.memberId !== "all"
+                    ? `Добавить операцию — ${selectedMemberPreview.name}`
+                    : "Добавить операцию"}
+              </h2>
               {editingId && (
                 <button type="button" onClick={() => resetForm()} className="inline-flex items-center gap-2 rounded-xl bg-white/10 px-3 py-2 text-sm hover:bg-white/15">
                   <X size={16} /> Отмена

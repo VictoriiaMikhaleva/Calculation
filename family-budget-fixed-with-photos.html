@@ -800,7 +800,11 @@
       '<main class="main-grid">' +
       '<section class="card">' +
       '<div class="form-head"><h2>' +
-      (state.editingId ? "Редактировать операцию" : "Добавить операцию") +
+      (state.editingId
+        ? "Редактировать операцию"
+        : state.form.memberId !== "all"
+          ? "Добавить операцию — " + escapeHtml(getMemberName(state.form.memberId))
+          : "Добавить операцию") +
       "</h2>" +
       (state.editingId
         ? '<button type="button" class="cancel-btn" id="btn-cancel-edit">✕ Отмена</button>'

@@ -388,6 +388,13 @@ export default function App() {
     return months;
   }, [transactions]);
 
+  const periodTransactions = useMemo(() => {
+    if (filterMonth === "all") return transactions;
+    return transactions.filter((item) => monthKey(item.date) === filterMonth);
+  }, [transactions, filterMonth]);
+
+  const periodLabel = filterMonth === "all" ? null : monthLabel(filterMonth);
+
   const visibleTransactions = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
 
@@ -414,20 +421,21 @@ export default function App() {
 
   const historyDayGroups = useMemo(() => groupTransactionsByDay(visibleTransactions), [visibleTransactions]);
 
-  const totalIncome = useMemo(() => sumAmounts(transactions, (item) => item.type === "income"), [transactions]);
-  const totalExpense = useMemo(() => sumAmounts(transactions, (item) => item.type === "expense"), [transactions]);
+  const totalIncome = useMemo(() => sumAmounts(periodTransactions, (item) => item.type === "income"), [periodTransactions]);
+  const totalExpense = useMemo(() => sumAmounts(periodTransactions, (item) => item.type === "expense"), [periodTransactions]);
   const balance = totalIncome - totalExpense;
   const savingRate = totalIncome > 0 ? Math.round((balance / totalIncome) * 100) : 0;
 
   const filteredIncome = useMemo(() => sumAmounts(visibleTransactions, (item) => item.type === "income"), [visibleTransactions]);
   const filteredExpense = useMemo(() => sumAmounts(visibleTransactions, (item) => item.type === "expense"), [visibleTransactions]);
-  const averageExpense = totalExpense > 0 && transactions.filter((item) => item.type === "expense").length > 0
-    ? Math.round(totalExpense / transactions.filter((item) => item.type === "expense").length)
-    : 0;
+  const averageExpense = useMemo(() => {
+    const expenses = periodTransactions.filter((item) => item.type === "expense");
+    return expenses.length > 0 ? Math.round(totalExpense / expenses.length) : 0;
+  }, [periodTransactions, totalExpense]);
 
   const expensesByCategory = useMemo(() => {
     const map = new Map();
-    transactions
+    periodTransactions
       .filter((item) => item.type === "expense")
       .forEach((item) => {
         const label = getCategoryLabel(item);
@@ -437,17 +445,17 @@ export default function App() {
     return [...map.entries()]
       .map(([name, value]) => ({ name, value }))
       .sort((a, b) => b.value - a.value);
-  }, [transactions]);
+  }, [periodTransactions]);
 
   const biggestExpense = expensesByCategory[0] || null;
 
   const memberBarData = useMemo(() => {
     return MEMBER_OPTIONS.map((member) => ({
       name: member.name,
-      Доходы: sumAmounts(transactions, (item) => item.memberId === member.id && item.type === "income"),
-      Расходы: sumAmounts(transactions, (item) => item.memberId === member.id && item.type === "expense"),
+      Доходы: sumAmounts(periodTransactions, (item) => item.memberId === member.id && item.type === "income"),
+      Расходы: sumAmounts(periodTransactions, (item) => item.memberId === member.id && item.type === "expense"),
     }));
-  }, [transactions]);
+  }, [periodTransactions]);
 
   const monthlyData = useMemo(() => {
     const map = new Map();
@@ -466,6 +474,8 @@ export default function App() {
     return [...map.values()].sort((a, b) => a.key.localeCompare(b.key));
   }, [transactions]);
 
+  const limitsMonthKey = filterMonth === "all" ? monthKey(today()) : filterMonth;
+
   const limitsData = useMemo(() => {
     return Object.entries(limits)
       .map(([category, limit]) => {
@@ -474,13 +484,13 @@ export default function App() {
           (item) =>
             item.type === "expense" &&
             getCategoryLabel(item) === category &&
-            monthKey(item.date) === monthKey(today())
+            monthKey(item.date) === limitsMonthKey
         );
         const percent = limit > 0 ? Math.round((spent / limit) * 100) : 0;
         return { category, limit: Number(limit || 0), spent, percent, remaining: Math.max(Number(limit || 0) - spent, 0) };
       })
       .sort((a, b) => b.percent - a.percent);
-  }, [limits, transactions]);
+  }, [limits, transactions, limitsMonthKey]);
 
   const advice = useMemo(() => {
     const tips = [];
@@ -716,7 +726,7 @@ if (saved) {
                 balance >= 0 ? "bg-green-500/15" : "bg-red-500/15"
               }`}
             >
-              <p className="text-sm text-slate-300">Текущий баланс</p>
+              <p className="text-sm text-slate-300">{periodLabel ? `Баланс за ${periodLabel}` : "Текущий баланс"}</p>
               <p className={`text-3xl font-black leading-none sm:text-4xl ${balance >= 0 ? "text-green-400" : "text-red-400"}`}>
                 {currency.format(balance)}
               </p>
@@ -736,8 +746,8 @@ if (saved) {
 
           <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
             {FAMILY_MEMBERS.map((member) => {
-              const income = sumAmounts(transactions, (item) => item.memberId === member.id && item.type === "income");
-              const expense = sumAmounts(transactions, (item) => item.memberId === member.id && item.type === "expense");
+              const income = sumAmounts(periodTransactions, (item) => item.memberId === member.id && item.type === "income");
+              const expense = sumAmounts(periodTransactions, (item) => item.memberId === member.id && item.type === "expense");
 
               const isSelected = form.memberId === member.id && !editingId;
 
@@ -770,35 +780,35 @@ if (saved) {
         <section className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-2 xl:grid-cols-5">
           <StatCard
             icon={<TrendingUp />}
-            label="Доходы"
+            label={periodLabel ? `Доходы (${periodLabel})` : "Доходы"}
             value={currency.format(totalIncome)}
             tone="green"
             onClick={() => openStatSection("history", { filterType: "income" })}
           />
           <StatCard
             icon={<TrendingDown />}
-            label="Расходы"
+            label={periodLabel ? `Расходы (${periodLabel})` : "Расходы"}
             value={currency.format(totalExpense)}
             tone="red"
             onClick={() => openStatSection("history", { filterType: "expense" })}
           />
           <StatCard
             icon={<Wallet />}
-            label="Остаток"
+            label={periodLabel ? `Остаток (${periodLabel})` : "Остаток"}
             value={currency.format(balance)}
             tone={balance >= 0 ? "green" : "red"}
             onClick={() => openStatSection("dashboard")}
           />
           <StatCard
             icon={<PiggyBank />}
-            label="Средний расход"
+            label={periodLabel ? `Средний расход (${periodLabel})` : "Средний расход"}
             value={currency.format(averageExpense)}
             tone="slate"
             onClick={() => openStatSection("history", { filterType: "expense" })}
           />
           <StatCard
             icon={<Target />}
-            label="Главная статья"
+            label={periodLabel ? `Главная статья (${periodLabel})` : "Главная статья"}
             value={biggestExpense ? `${biggestExpense.name}: ${currency.format(biggestExpense.value)}` : "Пока нет"}
             tone="slate"
             onClick={() => openStatSection("dashboard")}
@@ -922,7 +932,7 @@ if (saved) {
             {activeTab === "dashboard" && (
               <div className="space-y-6">
                 <div className="grid gap-6 xl:grid-cols-2">
-                  <ChartCard title="На что уходит больше денег">
+                  <ChartCard title={periodLabel ? `На что уходит больше денег (${periodLabel})` : "На что уходит больше денег"}>
                     {expensesByCategory.length ? (
                       <div className="px-2 py-4 sm:px-6 sm:py-6">
                         <ResponsiveContainer width="100%" height={pieChartHeight}>
@@ -994,7 +1004,9 @@ if (saved) {
               <div className="rounded-2xl border border-white/10 bg-white/5 p-4 shadow-xl sm:rounded-3xl sm:p-5">
                 <div className="mb-4 flex items-center gap-2">
                   <Target size={20} />
-                  <h2 className="text-xl font-bold sm:text-2xl">Лимиты на текущий месяц</h2>
+                  <h2 className="text-xl font-bold sm:text-2xl">
+                    {periodLabel ? `Лимиты за ${periodLabel}` : "Лимиты на текущий месяц"}
+                  </h2>
                 </div>
 
                 <div className="space-y-3">

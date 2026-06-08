@@ -346,6 +346,17 @@
     return o;
   }
 
+  function periodTransactions() {
+    if (state.filterMonth === "all") return state.transactions;
+    return state.transactions.filter(function (item) {
+      return monthKey(item.date) === state.filterMonth;
+    });
+  }
+
+  function periodLabel() {
+    return state.filterMonth === "all" ? null : monthLabel(state.filterMonth);
+  }
+
   function computeVisible() {
     var q = state.searchQuery.trim().toLowerCase();
     return state.transactions
@@ -377,7 +388,7 @@
 
   function expensesByCategory() {
     var map = {};
-    state.transactions.forEach(function (item) {
+    periodTransactions().forEach(function (item) {
       if (item.type !== "expense") return;
       var label = getCategoryLabel(item);
       map[label] = (map[label] || 0) + Number(item.amount || 0);
@@ -408,7 +419,7 @@
   }
 
   function limitsData() {
-    var mk = monthKey(today());
+    var mk = state.filterMonth === "all" ? monthKey(today()) : state.filterMonth;
     return Object.keys(state.limits)
       .map(function (category) {
         var limit = Number(state.limits[category] || 0);
@@ -479,10 +490,13 @@
     captureFormState();
     if (!state.form.date) state.form.date = today();
 
-    var totalIncome = sumAmounts(state.transactions, function (i) {
+    var period = periodTransactions();
+    var periodLbl = periodLabel();
+
+    var totalIncome = sumAmounts(period, function (i) {
       return i.type === "income";
     });
-    var totalExpense = sumAmounts(state.transactions, function (i) {
+    var totalExpense = sumAmounts(period, function (i) {
       return i.type === "expense";
     });
     var balance = totalIncome - totalExpense;
@@ -496,7 +510,7 @@
       return i.type === "expense";
     });
 
-    var expCount = state.transactions.filter(function (i) {
+    var expCount = period.filter(function (i) {
       return i.type === "expense";
     }).length;
     var averageExpense =
@@ -555,10 +569,10 @@
 
     var memberBars = "";
     MEMBER_OPTIONS.forEach(function (member) {
-      var inc = sumAmounts(state.transactions, function (i) {
+      var inc = sumAmounts(period, function (i) {
         return i.memberId === member.id && i.type === "income";
       });
-      var exp = sumAmounts(state.transactions, function (i) {
+      var exp = sumAmounts(period, function (i) {
         return i.memberId === member.id && i.type === "expense";
       });
       var t = inc + exp;
@@ -675,10 +689,10 @@
 
     var memberCards = "";
     FAMILY_MEMBERS.forEach(function (member) {
-      var income = sumAmounts(state.transactions, function (i) {
+      var income = sumAmounts(period, function (i) {
         return i.memberId === member.id && i.type === "income";
       });
-      var expense = sumAmounts(state.transactions, function (i) {
+      var expense = sumAmounts(period, function (i) {
         return i.memberId === member.id && i.type === "expense";
       });
       memberCards +=
@@ -755,7 +769,7 @@
       '<div class="balance-box ' +
       balanceCls +
       '">' +
-      '<p class="muted">Текущий баланс</p>' +
+      '<p class="muted">' + (periodLbl ? "Баланс за " + escapeHtml(periodLbl) : "Текущий баланс") + '</p>' +
       '<p class="big ' +
       headerBalanceCls +
       '">' +
@@ -769,21 +783,21 @@
       "</div></section>" +
 
       '<section class="stats">' +
-      '<div class="stat g"><div class="lbl">📈 Доходы</div><div class="val">' +
+      '<div class="stat g"><div class="lbl">📈 ' + (periodLbl ? "Доходы (" + escapeHtml(periodLbl) + ")" : "Доходы") + '</div><div class="val">' +
       escapeHtml(currency.format(totalIncome)) +
       '</div></div>' +
-      '<div class="stat r"><div class="lbl">📉 Расходы</div><div class="val">' +
+      '<div class="stat r"><div class="lbl">📉 ' + (periodLbl ? "Расходы (" + escapeHtml(periodLbl) + ")" : "Расходы") + '</div><div class="val">' +
       escapeHtml(currency.format(totalExpense)) +
       '</div></div>' +
       '<div class="stat ' +
       (balance >= 0 ? "g" : "r") +
-      '"><div class="lbl">💰 Остаток</div><div class="val">' +
+      '"><div class="lbl">💰 ' + (periodLbl ? "Остаток (" + escapeHtml(periodLbl) + ")" : "Остаток") + '</div><div class="val">' +
       escapeHtml(currency.format(balance)) +
       '</div></div>' +
-      '<div class="stat n"><div class="lbl">🐷 Средний расход</div><div class="val">' +
+      '<div class="stat n"><div class="lbl">🐷 ' + (periodLbl ? "Средний расход (" + escapeHtml(periodLbl) + ")" : "Средний расход") + '</div><div class="val">' +
       escapeHtml(currency.format(averageExpense)) +
       '</div></div>' +
-      '<div class="stat n"><div class="lbl">🎯 Главная статья</div><div class="val">' +
+      '<div class="stat n"><div class="lbl">🎯 ' + (periodLbl ? "Главная статья (" + escapeHtml(periodLbl) + ")" : "Главная статья") + '</div><div class="val">' +
       (biggestExpense
         ? escapeHtml(biggestExpense.name + ": " + currency.format(biggestExpense.value))
         : "Пока нет") +
@@ -868,7 +882,7 @@
       '" id="panel-dashboard">' +
       '<div class="two-chart">' +
       '<div class="card">' +
-      '<div class="chart-title">На что уходит больше денег</div>' +
+      '<div class="chart-title">' + (periodLbl ? "На что уходит больше денег (" + escapeHtml(periodLbl) + ")" : "На что уходит больше денег") + '</div>' +
       (byCat.length
         ? '<div>' + catRows + '</div><div class="pie-legend">' + pieLegend + "</div>"
         : '<div class="empty">Добавьте расходы, чтобы увидеть диаграмму.</div>') +
@@ -888,7 +902,7 @@
 
       '<div class="panel ' +
       (state.activeTab === "limits" ? "on" : "") +
-      '" id="panel-limits"><div class="card"><h2>🎯 Лимиты на текущий месяц</h2>' +
+      '" id="panel-limits"><div class="card"><h2>🎯 ' + (periodLbl ? "Лимиты за " + escapeHtml(periodLbl) : "Лимиты на текущий месяц") + '</h2>' +
       limitsHtml +
       "</div></div>" +
 

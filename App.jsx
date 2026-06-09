@@ -158,6 +158,28 @@ function monthLabel(key) {
   return `${month}.${year}`;
 }
 
+const MONTH_NAMES_RU = [
+  "Январь",
+  "Февраль",
+  "Март",
+  "Апрель",
+  "Май",
+  "Июнь",
+  "Июль",
+  "Август",
+  "Сентябрь",
+  "Октябрь",
+  "Ноябрь",
+  "Декабрь",
+];
+
+function formatMonthGroupTitle(key) {
+  const [year, month] = String(key || "").split("-");
+  const monthIndex = Number(month) - 1;
+  if (!year || monthIndex < 0 || monthIndex > 11) return monthLabel(key);
+  return `${MONTH_NAMES_RU[monthIndex]} ${year}`;
+}
+
 function getMemberById(memberId) {
   return MEMBER_OPTIONS.find((member) => member.id === memberId) || MEMBER_OPTIONS[0];
 }
@@ -221,6 +243,7 @@ function groupTransactionsByMonth(items) {
   return [...map.values()]
     .map((group) => ({
       ...group,
+      title: formatMonthGroupTitle(group.key),
       total: sumAmounts(group.items, () => true),
     }))
     .sort((a, b) => b.key.localeCompare(a.key));
@@ -1605,7 +1628,11 @@ function ChartDrilldownTable({ title, transactions, total, onClose, onEdit, onDe
           <p className="mt-1 text-sm text-slate-400">
             {transactions.length} {transactions.length === 1 ? "операция" : transactions.length < 5 ? "операции" : "операций"}
             {" · "}итого {currency.format(total)}
+            {monthGroups.length > 1 ? ` · ${monthGroups.length} месяца` : ""}
           </p>
+          {monthGroups.length > 0 && (
+            <p className="mt-1 text-xs text-sky-300/80">Сгруппировано по месяцам, сначала новые</p>
+          )}
         </div>
         <button
           type="button"
@@ -1623,9 +1650,14 @@ function ChartDrilldownTable({ title, transactions, total, onClose, onEdit, onDe
           <div className="space-y-5 md:hidden">
             {monthGroups.map((group) => (
               <div key={group.key} className="space-y-3">
-                <div className="flex items-center justify-between gap-2 rounded-xl border border-white/10 bg-slate-900/80 px-4 py-2">
-                  <span className="font-semibold text-slate-200">{group.month}</span>
-                  <span className="text-sm font-bold text-white">{currency.format(group.total)}</span>
+                <div className="flex items-center justify-between gap-2 rounded-xl border border-sky-400/30 bg-sky-500/15 px-4 py-3">
+                  <span className="flex items-center gap-2 font-bold text-sky-100">
+                    <CalendarDays size={16} />
+                    {group.title}
+                  </span>
+                  <span className="text-right text-sm text-sky-200">
+                    {group.items.length} оп. · <span className="font-bold text-white">{currency.format(group.total)}</span>
+                  </span>
                 </div>
                 {group.items.map((item) => (
                   <article
@@ -1689,12 +1721,20 @@ function ChartDrilldownTable({ title, transactions, total, onClose, onEdit, onDe
               <tbody>
                 {monthGroups.map((group) => (
                   <Fragment key={group.key}>
-                    <tr className="border-t border-white/20 bg-slate-900/90">
-                      <td colSpan={4} className="p-3 font-semibold text-slate-200">
-                        {group.month}
+                    <tr className="border-t-2 border-sky-400/40 bg-sky-500/15">
+                      <td colSpan={6} className="p-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <span className="flex items-center gap-2 text-base font-bold text-sky-100">
+                            <CalendarDays size={16} />
+                            {group.title}
+                          </span>
+                          <span className="text-sm text-sky-200">
+                            {group.items.length} {group.items.length === 1 ? "операция" : group.items.length < 5 ? "операции" : "операций"}
+                            {" · "}
+                            <span className="font-bold text-white">{currency.format(group.total)}</span>
+                          </span>
+                        </div>
                       </td>
-                      <td className="p-3 text-right font-bold text-white">{currency.format(group.total)}</td>
-                      <td className="p-3" />
                     </tr>
                     {group.items.map((item) => (
                       <tr key={item.id} className="border-t border-white/10 hover:bg-white/5">

@@ -206,6 +206,26 @@ function groupTransactionsByDay(items) {
   }));
 }
 
+function groupTransactionsByMonth(items) {
+  const sorted = [...items].sort((a, b) => new Date(b.date) - new Date(a.date));
+  const map = new Map();
+
+  for (const item of sorted) {
+    const key = monthKey(item.date);
+    if (!map.has(key)) {
+      map.set(key, { key, month: monthLabel(key), items: [] });
+    }
+    map.get(key).items.push(item);
+  }
+
+  return [...map.values()]
+    .map((group) => ({
+      ...group,
+      total: sumAmounts(group.items, () => true),
+    }))
+    .sort((a, b) => b.key.localeCompare(a.key));
+}
+
 function formatDayTotal(group) {
   const parts = [];
 
@@ -1575,6 +1595,8 @@ function ChartCard({ title, children }) {
 }
 
 function ChartDrilldownTable({ title, transactions, total, onClose, onEdit, onDelete }) {
+  const monthGroups = useMemo(() => groupTransactionsByMonth(transactions), [transactions]);
+
   return (
     <div className="rounded-2xl border border-sky-400/30 bg-sky-500/5 p-4 shadow-xl sm:rounded-3xl sm:p-5">
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
@@ -1598,49 +1620,57 @@ function ChartDrilldownTable({ title, transactions, total, onClose, onEdit, onDe
         <EmptyState text="Операций по выбранному фильтру нет." />
       ) : (
         <>
-          <div className="space-y-3 md:hidden">
-            {transactions.map((item) => (
-              <article
-                key={item.id}
-                className="space-y-3 rounded-2xl border border-white/10 bg-slate-900/70 p-4"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-sm text-slate-400">{formatDisplayDate(item.date)}</span>
-                  <span
-                    className={`rounded-full px-3 py-1 text-xs font-bold ${
-                      item.type === "income" ? "bg-green-500/15 text-green-400" : "bg-red-500/15 text-red-400"
-                    }`}
-                  >
-                    {item.type === "income" ? "Доход" : "Расход"}
-                  </span>
+          <div className="space-y-5 md:hidden">
+            {monthGroups.map((group) => (
+              <div key={group.key} className="space-y-3">
+                <div className="flex items-center justify-between gap-2 rounded-xl border border-white/10 bg-slate-900/80 px-4 py-2">
+                  <span className="font-semibold text-slate-200">{group.month}</span>
+                  <span className="text-sm font-bold text-white">{currency.format(group.total)}</span>
                 </div>
-                <div className="flex items-center gap-3">
-                  <MemberAvatar name={getMemberName(item.memberId)} photo={getMemberPhoto(item.memberId)} size="sm" />
-                  <span className="font-medium">{getMemberName(item.memberId)}</span>
-                </div>
-                <p className="text-sm text-slate-200">{getCategoryLabel(item)}</p>
-                <p className="text-sm text-slate-400">{item.note || "—"}</p>
-                <p className={`text-lg font-bold ${item.type === "income" ? "text-green-400" : "text-red-400"}`}>
-                  {item.type === "income" ? "+" : "-"}
-                  {currency.format(item.amount)}
-                </p>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => onEdit(item)}
-                    className="flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl bg-white/10 text-sm text-slate-200"
+                {group.items.map((item) => (
+                  <article
+                    key={item.id}
+                    className="space-y-3 rounded-2xl border border-white/10 bg-slate-900/70 p-4"
                   >
-                    <Pencil size={16} /> Изменить
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onDelete(item.id)}
-                    className="flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl bg-red-500/10 text-sm text-red-400"
-                  >
-                    <Trash2 size={16} /> Удалить
-                  </button>
-                </div>
-              </article>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm text-slate-400">{formatDisplayDate(item.date)}</span>
+                      <span
+                        className={`rounded-full px-3 py-1 text-xs font-bold ${
+                          item.type === "income" ? "bg-green-500/15 text-green-400" : "bg-red-500/15 text-red-400"
+                        }`}
+                      >
+                        {item.type === "income" ? "Доход" : "Расход"}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <MemberAvatar name={getMemberName(item.memberId)} photo={getMemberPhoto(item.memberId)} size="sm" />
+                      <span className="font-medium">{getMemberName(item.memberId)}</span>
+                    </div>
+                    <p className="text-sm text-slate-200">{getCategoryLabel(item)}</p>
+                    <p className="text-sm text-slate-400">{item.note || "—"}</p>
+                    <p className={`text-lg font-bold ${item.type === "income" ? "text-green-400" : "text-red-400"}`}>
+                      {item.type === "income" ? "+" : "-"}
+                      {currency.format(item.amount)}
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => onEdit(item)}
+                        className="flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl bg-white/10 text-sm text-slate-200"
+                      >
+                        <Pencil size={16} /> Изменить
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onDelete(item.id)}
+                        className="flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl bg-red-500/10 text-sm text-red-400"
+                      >
+                        <Trash2 size={16} /> Удалить
+                      </button>
+                    </div>
+                  </article>
+                ))}
+              </div>
             ))}
           </div>
 
@@ -1657,42 +1687,53 @@ function ChartDrilldownTable({ title, transactions, total, onClose, onEdit, onDe
                 </tr>
               </thead>
               <tbody>
-                {transactions.map((item) => (
-                  <tr key={item.id} className="border-t border-white/10 hover:bg-white/5">
-                    <td className="p-3 text-slate-300">{formatDisplayDate(item.date)}</td>
-                    <td className="p-3">
-                      <div className="flex items-center gap-3">
-                        <MemberAvatar name={getMemberName(item.memberId)} photo={getMemberPhoto(item.memberId)} size="sm" />
-                        <span>{getMemberName(item.memberId)}</span>
-                      </div>
-                    </td>
-                    <td className="p-3">{getCategoryLabel(item)}</td>
-                    <td className="p-3 text-slate-400">{item.note || "—"}</td>
-                    <td className={`p-3 text-right font-bold ${item.type === "income" ? "text-green-400" : "text-red-400"}`}>
-                      {item.type === "income" ? "+" : "-"}
-                      {currency.format(item.amount)}
-                    </td>
-                    <td className="p-3">
-                      <div className="flex justify-end gap-2">
-                        <button
-                          type="button"
-                          onClick={() => onEdit(item)}
-                          className="rounded-xl p-2 text-slate-400 hover:bg-white/10 hover:text-white"
-                          title="Редактировать"
-                        >
-                          <Pencil size={16} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => onDelete(item.id)}
-                          className="rounded-xl p-2 text-slate-400 hover:bg-red-500/15 hover:text-red-400"
-                          title="Удалить"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
+                {monthGroups.map((group) => (
+                  <Fragment key={group.key}>
+                    <tr className="border-t border-white/20 bg-slate-900/90">
+                      <td colSpan={4} className="p-3 font-semibold text-slate-200">
+                        {group.month}
+                      </td>
+                      <td className="p-3 text-right font-bold text-white">{currency.format(group.total)}</td>
+                      <td className="p-3" />
+                    </tr>
+                    {group.items.map((item) => (
+                      <tr key={item.id} className="border-t border-white/10 hover:bg-white/5">
+                        <td className="p-3 text-slate-300">{formatDisplayDate(item.date)}</td>
+                        <td className="p-3">
+                          <div className="flex items-center gap-3">
+                            <MemberAvatar name={getMemberName(item.memberId)} photo={getMemberPhoto(item.memberId)} size="sm" />
+                            <span>{getMemberName(item.memberId)}</span>
+                          </div>
+                        </td>
+                        <td className="p-3">{getCategoryLabel(item)}</td>
+                        <td className="p-3 text-slate-400">{item.note || "—"}</td>
+                        <td className={`p-3 text-right font-bold ${item.type === "income" ? "text-green-400" : "text-red-400"}`}>
+                          {item.type === "income" ? "+" : "-"}
+                          {currency.format(item.amount)}
+                        </td>
+                        <td className="p-3">
+                          <div className="flex justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => onEdit(item)}
+                              className="rounded-xl p-2 text-slate-400 hover:bg-white/10 hover:text-white"
+                              title="Редактировать"
+                            >
+                              <Pencil size={16} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => onDelete(item.id)}
+                              className="rounded-xl p-2 text-slate-400 hover:bg-red-500/15 hover:text-red-400"
+                              title="Удалить"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </Fragment>
                 ))}
               </tbody>
             </table>

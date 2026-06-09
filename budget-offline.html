@@ -1,0 +1,1367 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Семейный бюджет — без установки программ, только браузер" />
+  <title>Калькулятор расходов</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: #020617;
+      color: #f1f5f9;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    .wrap { max-width: 80rem; margin: 0 auto; padding: 1rem 1.5rem 2rem; }
+    @media (min-width: 768px) { .wrap { padding: 2rem; } }
+    .stack > * + * { margin-top: 1.5rem; }
+    .hdr {
+      border-radius: 1.5rem;
+      border: 1px solid rgba(255,255,255,.1);
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+      padding: 1.5rem;
+      box-shadow: 0 25px 50px -12px rgba(0,0,0,.5);
+      overflow: hidden;
+    }
+    .hdr-grid { display: flex; flex-direction: column; gap: 1.5rem; }
+    @media (min-width: 1024px) {
+      .hdr-grid { flex-direction: row; align-items: center; justify-content: space-between; }
+    }
+    .badge {
+      display: inline-flex; align-items: center; gap: .5rem;
+      border-radius: 9999px; background: rgba(255,255,255,.1); padding: .25rem .75rem;
+      font-size: .875rem; color: #cbd5e1;
+    }
+    h1 { font-size: clamp(1.75rem, 4vw, 3rem); font-weight: 800; letter-spacing: -.02em; margin: .5rem 0 0; }
+    .hdr p.lead { color: #cbd5e1; max-width: 42rem; margin-top: .75rem; line-height: 1.5; }
+    .balance-box { border-radius: 1.5rem; padding: 1.25rem; text-align: right; }
+    .balance-box.pos { background: rgba(34,197,94,.15); }
+    .balance-box.neg { background: rgba(239,68,68,.15); }
+    .balance-box .big { font-size: 2.25rem; font-weight: 900; }
+    .balance-box .big.pos { color: #4ade80; }
+    .balance-box .big.neg { color: #f87171; }
+    .muted { color: #94a3b8; font-size: .875rem; }
+    .card {
+      border-radius: 1.5rem;
+      border: 1px solid rgba(255,255,255,.1);
+      background: rgba(255,255,255,.05);
+      padding: 1.25rem;
+      box-shadow: 0 20px 25px -5px rgba(0,0,0,.3);
+    }
+    h2 { font-size: 1.5rem; font-weight: 800; margin: 0 0 1rem; }
+    .members { display: grid; gap: 1rem; grid-template-columns: 1fr; }
+    @media (min-width: 640px) { .members { grid-template-columns: repeat(2, 1fr); } }
+    @media (min-width: 1024px) { .members { grid-template-columns: repeat(4, 1fr); } }
+    .mem-btn {
+      text-align: left;
+      border-radius: 1rem;
+      border: 1px solid rgba(255,255,255,.1);
+      background: rgba(15,23,42,.7);
+      padding: 1rem;
+      color: inherit;
+      cursor: pointer;
+      transition: transform .15s, background .15s;
+      font: inherit;
+    }
+    .mem-btn:hover { transform: translateY(-2px); background: #0f172a; }
+    .mem-btn.selected { border-color: rgba(96,165,250,.6); box-shadow: 0 0 0 2px rgba(96,165,250,.3); }
+    .mem-row { display: flex; align-items: center; gap: 1rem; }
+    .avatar {
+      flex-shrink: 0; width: 5rem; height: 5rem; border-radius: 9999px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.5rem; font-weight: 800;
+      background: linear-gradient(135deg, rgba(14,165,233,.45), rgba(124,58,237,.45));
+      ring: 2px solid rgba(255,255,255,.1);
+      box-shadow: 0 0 0 2px rgba(255,255,255,.1);
+    }
+    .avatar.sm { width: 2rem; height: 2rem; font-size: .7rem; }
+    .avatar.md { width: 3rem; height: 3rem; font-size: 1rem; }
+    .inc { color: #4ade80; font-size: .875rem; margin-top: .25rem; }
+    .exp { color: #f87171; font-size: .875rem; }
+    .stats { display: grid; gap: 1rem; grid-template-columns: 1fr; }
+    @media (min-width: 768px) { .stats { grid-template-columns: repeat(2, 1fr); } }
+    @media (min-width: 1280px) { .stats { grid-template-columns: repeat(5, 1fr); } }
+    .stat {
+      border-radius: 1.5rem; border: 1px solid; padding: 1.25rem;
+    }
+    .stat.g { border-color: rgba(34,197,94,.2); background: rgba(34,197,94,.1); color: #4ade80; }
+    .stat.r { border-color: rgba(239,68,68,.2); background: rgba(239,68,68,.1); color: #f87171; }
+    .stat.n { border-color: rgba(255,255,255,.1); background: rgba(255,255,255,.05); color: #e2e8f0; }
+    .stat .lbl { font-size: .875rem; color: #cbd5e1; }
+    .stat .val { font-size: 1.25rem; font-weight: 900; color: #fff; margin-top: .25rem; word-break: break-word; }
+    .main-grid { display: grid; gap: 1.5rem; grid-template-columns: 1fr; }
+    @media (min-width: 1024px) { .main-grid { grid-template-columns: 430px 1fr; } }
+    label.lbl { display: block; margin-bottom: .75rem; }
+    label.lbl > span { display: block; font-size: .875rem; font-weight: 500; color: #cbd5e1; margin-bottom: .25rem; }
+    .input, .small-input {
+      width: 100%; border-radius: 1rem; border: 1px solid rgba(255,255,255,.1);
+      background: #0f172a; padding: .85rem 1rem; color: #fff; outline: none; font: inherit;
+    }
+    .small-input { border-radius: .9rem; padding: .65rem .85rem; font-size: .9rem; }
+    .input:focus, .small-input:focus {
+      border-color: rgba(59,130,246,.9);
+      box-shadow: 0 0 0 3px rgba(59,130,246,.18);
+    }
+    .toggle { display: grid; grid-template-columns: 1fr 1fr; gap: .25rem; background: #0f172a; padding: .25rem; border-radius: 1rem; margin-bottom: 1rem; }
+    .toggle button {
+      border: none; border-radius: .75rem; padding: .75rem 1rem; font-weight: 600; cursor: pointer;
+      font: inherit; transition: background .15s, color .15s;
+    }
+    .toggle button.off { background: transparent; color: #94a3b8; }
+    .toggle button.off:hover { background: rgba(255,255,255,.05); }
+    .toggle button.on-e { background: #ef4444; color: #fff; }
+    .toggle button.on-i { background: #22c55e; color: #fff; }
+    .btn-submit {
+      width: 100%; margin-top: 1rem; padding: 1rem; border: none; border-radius: 1rem;
+      font-weight: 800; color: #fff; cursor: pointer; font-size: 1rem;
+      transition: transform .1s;
+    }
+    .btn-submit:hover { transform: scale(1.01); }
+    .btn-submit.e { background: #ef4444; }
+    .btn-submit.e:hover { background: #f87171; }
+    .btn-submit.i { background: #22c55e; }
+    .btn-submit.i:hover { background: #4ade80; }
+    .utils { display: grid; grid-template-columns: repeat(2, 1fr); gap: .5rem; margin-top: 1rem; }
+    .utility-button {
+      display: flex; align-items: center; justify-content: center; gap: .35rem;
+      border-radius: 1rem; border: none; background: rgba(255,255,255,.07);
+      padding: .75rem; font-size: .85rem; color: #cbd5e1; cursor: pointer; font: inherit;
+    }
+    .utility-button:hover { background: rgba(255,255,255,.12); color: #fff; }
+    .tabs-bar { border-radius: 1.5rem; border: 1px solid rgba(255,255,255,.1); background: rgba(255,255,255,.05); padding: .5rem; }
+    .tabs { display: grid; gap: .5rem; grid-template-columns: repeat(2, 1fr); }
+    @media (min-width: 768px) { .tabs { grid-template-columns: repeat(4, 1fr); } }
+    .tab {
+      display: flex; align-items: center; justify-content: center; gap: .5rem;
+      border-radius: 1rem; padding: .75rem 1rem; font-weight: 600; border: none;
+      cursor: pointer; font: inherit; color: #cbd5e1; background: transparent;
+      transition: background .15s, color .15s;
+    }
+    .tab:hover { background: rgba(255,255,255,.1); color: #fff; }
+    .tab.on { background: #fff; color: #020617; }
+    .panel { display: none; }
+    .panel.on { display: block; }
+    .chart-title { font-size: 1.25rem; font-weight: 800; margin-bottom: 1rem; }
+    .bar-row { margin-bottom: .75rem; }
+    .bar-label { display: flex; justify-content: space-between; font-size: .8rem; margin-bottom: .25rem; color: #cbd5e1; }
+    .bar-track { height: .75rem; border-radius: 9999px; background: rgba(255,255,255,.1); overflow: hidden; }
+    .bar-fill { height: 100%; border-radius: 9999px; transition: width .2s; }
+    .pie-legend { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: 1rem; font-size: .8rem; }
+    .pie-item { display: flex; align-items: center; gap: .35rem; }
+    .cat-select-btn {
+      border: none; background: transparent; color: inherit; font: inherit; cursor: pointer;
+      padding: .15rem .35rem; border-radius: .5rem; text-align: left;
+    }
+    .cat-select-btn:hover { background: rgba(255,255,255,.1); color: #fff; }
+    .cat-select-btn.on { background: rgba(56,189,248,.2); color: #7dd3fc; font-weight: 700; }
+    .cat-banner {
+      display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem;
+      margin-bottom: 1rem; border-radius: 1rem; border: 1px solid rgba(56,189,248,.3);
+      background: rgba(56,189,248,.1); padding: .75rem 1rem;
+    }
+    .vbar-chart {
+      display: flex; align-items: flex-end; gap: .5rem; min-height: 220px; padding: 1rem 0 .25rem;
+      overflow-x: auto;
+    }
+    .vbar-item {
+      flex: 1; min-width: 2.75rem; max-width: 4rem; display: flex; flex-direction: column;
+      align-items: center; gap: .35rem;
+    }
+    .vbar-col-wrap { width: 100%; height: 180px; display: flex; align-items: flex-end; justify-content: center; }
+    .vbar-col {
+      width: 100%; max-width: 2.25rem; border-radius: .5rem .5rem 0 0; min-height: 4px;
+      transition: opacity .15s;
+    }
+    .vbar-label {
+      font-size: .62rem; line-height: 1.1; text-align: center; color: #cbd5e1; word-break: break-word;
+    }
+    .vbar-label.on { color: #7dd3fc; font-weight: 700; }
+    .dot { width: .65rem; height: .65rem; border-radius: 2px; flex-shrink: 0; }
+    .two-chart { display: grid; gap: 1.5rem; }
+    @media (min-width: 1280px) { .two-chart { grid-template-columns: repeat(2, 1fr); } }
+    .member-chart .row { margin-bottom: 1rem; }
+    .member-chart .name { font-size: .85rem; margin-bottom: .35rem; color: #e2e8f0; }
+    .dual-bar { display: flex; gap: .35rem; height: 1.25rem; border-radius: .25rem; overflow: hidden; background: rgba(255,255,255,.06); }
+    .dual-bar > div { height: 100%; }
+    .dual-bar .green { background: #22c55e; }
+    .dual-bar .red { background: #ef4444; }
+    .month-table { width: 100%; border-collapse: collapse; font-size: .875rem; }
+    .month-table th, .month-table td { padding: .5rem .75rem; text-align: left; border-bottom: 1px solid rgba(255,255,255,.08); }
+    .month-table th { color: #94a3b8; font-weight: 600; }
+    .limit-row { border-radius: 1rem; border: 1px solid rgba(255,255,255,.1); background: rgba(15,23,42,.7); padding: 1rem; margin-bottom: .75rem; }
+    .limit-head { display: flex; flex-wrap: wrap; gap: .75rem; justify-content: space-between; align-items: flex-start; margin-bottom: .5rem; }
+    .prog { height: .75rem; border-radius: 9999px; background: rgba(255,255,255,.1); overflow: hidden; }
+    .prog > div { height: 100%; border-radius: 9999px; }
+    .history-tools { display: grid; gap: .5rem; margin-bottom: 1rem; }
+    @media (min-width: 768px) { .history-tools { grid-template-columns: repeat(4, 1fr); } }
+    .table-wrap { overflow-x: auto; border-radius: 1rem; border: 1px solid rgba(255,255,255,.1); }
+    table.data { width: 100%; min-width: 860px; border-collapse: collapse; font-size: .875rem; }
+    table.data th { background: #0f172a; color: #cbd5e1; padding: .75rem; text-align: left; }
+    table.data td { padding: .75rem; border-top: 1px solid rgba(255,255,255,.1); vertical-align: middle; }
+    table.data tr:hover { background: rgba(255,255,255,.05); }
+    .pill { border-radius: 9999px; padding: .25rem .75rem; font-size: .75rem; font-weight: 700; display: inline-block; }
+    .pill.in { background: rgba(34,197,94,.15); color: #4ade80; }
+    .pill.out { background: rgba(239,68,68,.15); color: #f87171; }
+    .tbl-actions { display: flex; gap: .5rem; justify-content: flex-end; }
+    .icon-btn {
+      border: none; background: transparent; color: #94a3b8; cursor: pointer; padding: .5rem; border-radius: .75rem;
+      font-size: 1rem;
+    }
+    .icon-btn:hover { background: rgba(255,255,255,.1); color: #fff; }
+    .icon-btn.del:hover { background: rgba(239,68,68,.15); color: #f87171; }
+    .tip { border-radius: 1rem; border: 1px solid rgba(255,255,255,.1); background: rgba(15,23,42,.7); padding: 1rem; margin-bottom: .75rem; color: #e2e8f0; line-height: 1.5; }
+    .empty { min-height: 10rem; display: flex; align-items: center; justify-content: center; color: #94a3b8; text-align: center; padding: 1.5rem; }
+    .preview-box { border-radius: 1rem; border: 1px solid rgba(255,255,255,.1); background: rgba(15,23,42,.7); padding: .75rem; margin-bottom: 1rem; }
+    .preview-inner { display: flex; align-items: center; gap: .75rem; }
+    .search-wrap { position: relative; }
+    .search-wrap input { padding-left: 2.25rem; }
+    .search-ico { position: absolute; left: .75rem; top: 50%; transform: translateY(-50%); opacity: .5; pointer-events: none; font-size: .9rem; }
+    .form-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: .5rem; }
+    .cancel-btn {
+      display: inline-flex; align-items: center; gap: .35rem;
+      border-radius: .75rem; border: none; background: rgba(255,255,255,.1); color: #e2e8f0;
+      padding: .5rem .75rem; font-size: .875rem; cursor: pointer; font: inherit;
+    }
+    .cancel-btn:hover { background: rgba(255,255,255,.15); }
+    noscript { padding: 2rem; display: block; font-family: system-ui, sans-serif; }
+  </style>
+</head>
+<body>
+  <noscript>Включите JavaScript — калькулятор работает в браузере без установки программ.</noscript>
+  <div id="app" class="wrap stack"></div>
+
+  <script>
+(function () {
+  "use strict";
+
+  var STORAGE_KEY = "family-budget-app-v4";
+
+  var FAMILY_MEMBERS = [
+    { id: "alisa", name: "Алиса" },
+    { id: "alina", name: "Алина" },
+    { id: "grisha", name: "Гриша" },
+    { id: "vika", name: "Вика" },
+  ];
+  var MEMBER_OPTIONS = [{ id: "all", name: "Все" }].concat(FAMILY_MEMBERS);
+
+  var EXPENSE_CATEGORIES = ["Еда","Вещи","Кафе","Развлечения","Транспорт","Дом","Здоровье","Образование","Подарки","Родители","Дни Рождения","Путешествия","Связь","Красота","Другое","Своя статья"];
+  var INCOME_CATEGORIES = ["Зарплата","Премия","Подработка","Подарок","Кэшбэк","Возврат","Инвестиции","Своя статья"];
+
+  var DEFAULT_LIMITS = {
+    "Еда": 60000, "Вещи": 30000, "Кафе": 20000, "Развлечения": 25000, "Транспорт": 15000,
+    "Дом": 50000, "Здоровье": 20000, "Образование": 25000, "Подарки": 15000, "Путешествия": 40000,
+    "Связь": 10000, "Красота": 15000, "Другое": 15000, "Родители": 0, "Дни Рождения": 0, "Своя статья": 0,
+  };
+
+  var PIE_COLORS = ["#ef4444","#f97316","#eab308","#8b5cf6","#06b6d4","#ec4899","#84cc16","#64748b","#14b8a6","#fb7185","#a855f7","#22c55e"];
+
+  var demoTransactions = [
+    { id: "demo-1", type: "income", memberId: "vika", category: "Зарплата", customCategory: "", amount: 240000, date: "2026-05-01", note: "Основной доход" },
+    { id: "demo-2", type: "income", memberId: "grisha", category: "Подработка", customCategory: "", amount: 95000, date: "2026-05-03", note: "Проект" },
+    { id: "demo-3", type: "expense", memberId: "all", category: "Еда", customCategory: "", amount: 48000, date: "2026-05-05", note: "Продукты на неделю" },
+    { id: "demo-4", type: "expense", memberId: "alisa", category: "Развлечения", customCategory: "", amount: 8200, date: "2026-05-07", note: "Парк и аттракционы" },
+    { id: "demo-5", type: "expense", memberId: "alina", category: "Вещи", customCategory: "", amount: 12600, date: "2026-05-09", note: "Одежда" },
+    { id: "demo-6", type: "expense", memberId: "all", category: "Кафе", customCategory: "", amount: 15400, date: "2026-05-11", note: "Семейный ужин" },
+    { id: "demo-7", type: "expense", memberId: "vika", category: "Красота", customCategory: "", amount: 7400, date: "2026-04-20", note: "Уход" },
+    { id: "demo-8", type: "expense", memberId: "grisha", category: "Транспорт", customCategory: "", amount: 9500, date: "2026-04-18", note: "Такси и бензин" },
+    { id: "demo-9", type: "income", memberId: "vika", category: "Премия", customCategory: "", amount: 50000, date: "2026-04-10", note: "Премия" },
+  ];
+
+  var currency = new Intl.NumberFormat("ru-RU", { style: "currency", currency: "RUB", maximumFractionDigits: 0 });
+
+  var state = {
+    transactions: [],
+    limits: {},
+    filterMember: "all",
+    filterType: "all",
+    filterMonth: "all",
+    searchQuery: "",
+    editingId: null,
+    activeTab: "dashboard",
+    selectedExpenseCategory: null,
+    form: { type: "expense", memberId: "all", category: "Еда", customCategory: "", amount: "", date: "", note: "" },
+  };
+
+  function escapeHtml(s) {
+    return String(s == null ? "" : s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function createId() {
+    if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
+    return String(Date.now()) + "-" + String(Math.random()).slice(2);
+  }
+
+  function today() {
+    return new Date().toISOString().slice(0, 10);
+  }
+
+  function monthKey(date) {
+    return String(date || today()).slice(0, 7);
+  }
+
+  function monthLabel(key) {
+    var p = String(key).split("-");
+    return p.length >= 2 ? p[1] + "." + p[0] : key;
+  }
+
+  function getMemberById(memberId) {
+    for (var i = 0; i < MEMBER_OPTIONS.length; i++) {
+      if (MEMBER_OPTIONS[i].id === memberId) return MEMBER_OPTIONS[i];
+    }
+    return MEMBER_OPTIONS[0];
+  }
+
+  function getMemberName(memberId) {
+    return getMemberById(memberId).name;
+  }
+
+  function getCategoryLabel(item) {
+    if (item.category === "Своя статья") {
+      var c = (item.customCategory || "").trim();
+      return c || "Своя статья";
+    }
+    return item.category;
+  }
+
+  function getDefaultCategory(type) {
+    return type === "expense" ? "Еда" : "Зарплата";
+  }
+
+  function sumAmounts(items, pred) {
+    return items.reduce(function (sum, item) {
+      return pred(item) ? sum + Number(item.amount || 0) : sum;
+    }, 0);
+  }
+
+  function persist() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ transactions: state.transactions, limits: state.limits }));
+    } catch (e) {}
+  }
+
+  function loadInitial() {
+    var raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) {
+      state.transactions = demoTransactions.slice();
+      state.limits = copyLimits(DEFAULT_LIMITS);
+      return;
+    }
+    try {
+      var parsed = JSON.parse(raw);
+      state.transactions = Array.isArray(parsed.transactions) ? parsed.transactions : demoTransactions.slice();
+      state.limits = parsed.limits ? mergeLimits(DEFAULT_LIMITS, parsed.limits) : copyLimits(DEFAULT_LIMITS);
+    } catch (e) {
+      state.transactions = demoTransactions.slice();
+      state.limits = copyLimits(DEFAULT_LIMITS);
+    }
+  }
+
+  function copyLimits(obj) {
+    var o = {};
+    for (var k in obj) if (Object.prototype.hasOwnProperty.call(obj, k)) o[k] = obj[k];
+    return o;
+  }
+
+  function mergeLimits(def, saved) {
+    var o = copyLimits(def);
+    for (var k in saved) if (Object.prototype.hasOwnProperty.call(saved, k)) o[k] = saved[k];
+    return o;
+  }
+
+  function periodTransactions() {
+    if (state.filterMonth === "all") return state.transactions;
+    return state.transactions.filter(function (item) {
+      return monthKey(item.date) === state.filterMonth;
+    });
+  }
+
+  function periodLabel() {
+    return state.filterMonth === "all" ? null : monthLabel(state.filterMonth);
+  }
+
+  function computeVisible() {
+    var q = state.searchQuery.trim().toLowerCase();
+    return state.transactions
+      .filter(function (item) {
+        return state.filterMember === "all" || item.memberId === state.filterMember;
+      })
+      .filter(function (item) {
+        return state.filterType === "all" || item.type === state.filterType;
+      })
+      .filter(function (item) {
+        return state.filterMonth === "all" || monthKey(item.date) === state.filterMonth;
+      })
+      .filter(function (item) {
+        if (!q) return true;
+        var text = [
+          item.date,
+          item.type === "income" ? "доход" : "расход",
+          getMemberName(item.memberId),
+          getCategoryLabel(item),
+          item.note,
+          item.amount,
+        ].join(" ").toLowerCase();
+        return text.indexOf(q) !== -1;
+      })
+      .sort(function (a, b) {
+        return new Date(b.date) - new Date(a.date);
+      });
+  }
+
+  function expensesByCategory() {
+    var map = {};
+    periodTransactions().forEach(function (item) {
+      if (item.type !== "expense") return;
+      var label = getCategoryLabel(item);
+      map[label] = (map[label] || 0) + Number(item.amount || 0);
+    });
+    return Object.keys(map)
+      .map(function (name) {
+        return { name: name, value: map[name] };
+      })
+      .sort(function (a, b) {
+        return b.value - a.value;
+      });
+  }
+
+  function monthlyData() {
+    var map = {};
+    state.transactions.forEach(function (item) {
+      var key = monthKey(item.date);
+      if (!map[key]) map[key] = { key: key, month: monthLabel(key), inc: 0, exp: 0 };
+      if (item.type === "income") map[key].inc += Number(item.amount || 0);
+      if (item.type === "expense") map[key].exp += Number(item.amount || 0);
+      map[key].bal = map[key].inc - map[key].exp;
+    });
+    return Object.keys(map)
+      .sort()
+      .map(function (k) {
+        return map[k];
+      });
+  }
+
+  function limitsData() {
+    var mk = state.filterMonth === "all" ? monthKey(today()) : state.filterMonth;
+    return Object.keys(state.limits)
+      .map(function (category) {
+        var limit = Number(state.limits[category] || 0);
+        var spent = sumAmounts(state.transactions, function (item) {
+          return (
+            item.type === "expense" &&
+            getCategoryLabel(item) === category &&
+            monthKey(item.date) === mk
+          );
+        });
+        var percent = limit > 0 ? Math.round((spent / limit) * 100) : 0;
+        return {
+          category: category,
+          limit: limit,
+          spent: spent,
+          percent: percent,
+          remaining: Math.max(limit - spent, 0),
+        };
+      })
+      .sort(function (a, b) {
+        return b.percent - a.percent;
+      });
+  }
+
+  function adviceTips(totalIncome, totalExpense, balance, savingRate, biggestExpense, limitsArr) {
+    var tips = [];
+    if (savingRate < 10 && totalIncome > 0) {
+      tips.push("Норма накопления ниже 10%. Попробуйте временно снизить траты на кафе, развлечения или вещи.");
+    }
+    if (biggestExpense) {
+      tips.push("Больше всего денег уходит на «" + biggestExpense.name + "». Проверьте, можно ли поставить месячный лимит.");
+    }
+    var over = limitsArr.filter(function (x) {
+      return x.percent >= 100;
+    })[0];
+    if (over) {
+      tips.push("Лимит по статье «" + over.category + "» уже превышен или достигнут. Новые траты лучше согласовывать отдельно.");
+    }
+    if (balance > 0 && savingRate >= 20) {
+      tips.push("Баланс выглядит хорошо: можно часть остатка направить в накопления, отпуск или резервный фонд.");
+    }
+    if (!tips.length) tips.push("Добавьте больше операций, и здесь появятся персональные подсказки по бюджету.");
+    return tips;
+  }
+
+  function memberInitial(name) {
+    return String(name || "?")
+      .trim()
+      .slice(0, 1)
+      .toUpperCase();
+  }
+
+  function captureFormState() {
+    var form = document.getElementById("main-form");
+    if (!form) return;
+    var fd = new FormData(form);
+    state.form.memberId = fd.get("memberId") || state.form.memberId;
+    state.form.category = fd.get("category") || state.form.category;
+    state.form.customCategory = String(fd.get("customCategory") || "");
+    state.form.amount = String(fd.get("amount") || "");
+    state.form.date = fd.get("date") || state.form.date;
+    state.form.note = String(fd.get("note") || "");
+    state.form.type = fd.get("ftype") || state.form.type;
+  }
+
+  function render() {
+    var root = document.getElementById("app");
+    captureFormState();
+    if (!state.form.date) state.form.date = today();
+
+    var period = periodTransactions();
+    var periodLbl = periodLabel();
+
+    var totalIncome = sumAmounts(period, function (i) {
+      return i.type === "income";
+    });
+    var totalExpense = sumAmounts(period, function (i) {
+      return i.type === "expense";
+    });
+    var balance = totalIncome - totalExpense;
+    var savingRate = totalIncome > 0 ? Math.round((balance / totalIncome) * 100) : 0;
+
+    var visible = computeVisible();
+    var filteredIncome = sumAmounts(visible, function (i) {
+      return i.type === "income";
+    });
+    var filteredExpense = sumAmounts(visible, function (i) {
+      return i.type === "expense";
+    });
+
+    var expCount = period.filter(function (i) {
+      return i.type === "expense";
+    }).length;
+    var averageExpense =
+      totalExpense > 0 && expCount > 0 ? Math.round(totalExpense / expCount) : 0;
+
+    var byCat = expensesByCategory();
+    var biggestExpense = byCat[0] || null;
+
+    var months = [];
+    var seen = {};
+    state.transactions.forEach(function (item) {
+      var k = monthKey(item.date);
+      if (!seen[k]) {
+        seen[k] = 1;
+        months.push(k);
+      }
+    });
+    months.sort().reverse();
+
+    var limData = limitsData();
+    var tips = adviceTips(totalIncome, totalExpense, balance, savingRate, biggestExpense, limData);
+
+    var selectedCat = state.selectedExpenseCategory;
+    var selectedCatAmount = 0;
+    byCat.forEach(function (row) {
+      if (row.name === selectedCat) selectedCatAmount = row.value;
+    });
+
+    var catRows = "";
+    var maxCat = byCat[0] ? byCat[0].value : 1;
+    byCat.forEach(function (row, idx) {
+      var pct = maxCat ? Math.round((row.value / maxCat) * 100) : 0;
+      var isOn = selectedCat === row.name;
+      catRows +=
+        '<div class="bar-row">' +
+        '<div class="bar-label"><button type="button" class="cat-select-btn' +
+        (isOn ? " on" : "") +
+        '" data-cat-select="' +
+        escapeHtml(row.name) +
+        '">' +
+        escapeHtml(row.name) +
+        (isOn ? " — " + escapeHtml(currency.format(row.value)) : "") +
+        '</button><span>' +
+        escapeHtml(currency.format(row.value)) +
+        "</span></div>" +
+        '<div class="bar-track"><div class="bar-fill" style="width:' +
+        pct +
+        "%;background:" +
+        PIE_COLORS[idx % PIE_COLORS.length] +
+        ";opacity:" +
+        (selectedCat && !isOn ? "0.35" : "1") +
+        '"></div></div></div>';
+    });
+
+    var pieLegend = "";
+    var sumExp = byCat.reduce(function (s, x) {
+      return s + x.value;
+    }, 0);
+    byCat.forEach(function (row, idx) {
+      var pc = sumExp ? Math.round((row.value / sumExp) * 100) : 0;
+      var isOn = selectedCat === row.name;
+      pieLegend +=
+        '<button type="button" class="pie-item cat-select-btn' +
+        (isOn ? " on" : "") +
+        '" data-cat-select="' +
+        escapeHtml(row.name) +
+        '"><span class="dot" style="background:' +
+        PIE_COLORS[idx % PIE_COLORS.length] +
+        '"></span> ' +
+        escapeHtml(row.name) +
+        " " +
+        pc +
+        "%" +
+        (isOn ? " — " + escapeHtml(currency.format(row.value)) : "") +
+        "</button>";
+    });
+
+    var vbarRows = "";
+    byCat.forEach(function (row, idx) {
+      var pct = maxCat ? Math.round((row.value / maxCat) * 100) : 0;
+      var isOn = selectedCat === row.name;
+      vbarRows +=
+        '<button type="button" class="vbar-item cat-select-btn' +
+        (isOn ? " on" : "") +
+        '" data-cat-select="' +
+        escapeHtml(row.name) +
+        '" title="' +
+        escapeHtml(row.name + ": " + currency.format(row.value)) +
+        '"><div class="vbar-col-wrap"><div class="vbar-col" style="height:' +
+        pct +
+        "%;background:" +
+        PIE_COLORS[idx % PIE_COLORS.length] +
+        ";opacity:" +
+        (selectedCat && !isOn ? "0.35" : "1") +
+        '"></div></div><div class="vbar-label' +
+        (isOn ? " on" : "") +
+        '">' +
+        escapeHtml(row.name) +
+        "</div></button>";
+    });
+
+    var catBanner =
+      selectedCat
+        ? '<div class="cat-banner"><span><span class="muted">' +
+          escapeHtml(selectedCat) +
+          ":</span> <strong>" +
+          escapeHtml(currency.format(selectedCatAmount)) +
+          '</strong></span><button type="button" class="cat-select-btn" id="btn-clear-cat">Сбросить</button></div>'
+        : "";
+
+    var memberBars = "";
+    MEMBER_OPTIONS.forEach(function (member) {
+      var inc = sumAmounts(period, function (i) {
+        return i.memberId === member.id && i.type === "income";
+      });
+      var exp = sumAmounts(period, function (i) {
+        return i.memberId === member.id && i.type === "expense";
+      });
+      var t = inc + exp;
+      var wi = t ? Math.round((inc / t) * 100) : 50;
+      var we = 100 - wi;
+      memberBars +=
+        '<div class="row"><div class="name">' +
+        escapeHtml(member.name) +
+        '</div><div class="dual-bar"><div class="green" style="width:' +
+        wi +
+        '%" title="Доходы"></div><div class="red" style="width:' +
+        we +
+        '%" title="Расходы"></div></div>' +
+        '<div class="muted" style="margin-top:.25rem;font-size:.75rem;">+ ' +
+        escapeHtml(currency.format(inc)) +
+        " · − " +
+        escapeHtml(currency.format(exp)) +
+        "</div></div>";
+    });
+
+    var monthRows = "";
+    monthlyData().forEach(function (row) {
+      monthRows +=
+        "<tr><td>" +
+        escapeHtml(row.month) +
+        "</td><td class=\"inc\">" +
+        escapeHtml(currency.format(row.inc)) +
+        "</td><td class=\"exp\">" +
+        escapeHtml(currency.format(row.exp)) +
+        "</td><td>" +
+        escapeHtml(currency.format(row.bal)) +
+        "</td></tr>";
+    });
+
+    var limitsHtml = "";
+    limData.forEach(function (item) {
+      var barClass = item.percent >= 100 ? "#ef4444" : item.percent >= 80 ? "#eab308" : "#22c55e";
+      var warn = item.percent >= 100 ? " ⚠" : "";
+      limitsHtml +=
+        '<div class="limit-row">' +
+        '<div class="limit-head"><div><strong>' +
+        escapeHtml(item.category + warn) +
+        '</strong><div class="muted">Потрачено ' +
+        escapeHtml(currency.format(item.spent)) +
+        " из " +
+        escapeHtml(currency.format(item.limit)) +
+        ". Осталось " +
+        escapeHtml(currency.format(item.remaining)) +
+        ".</div></div>" +
+        '<input class="small-input" style="max-width:10rem" type="number" min="0" data-limit="' +
+        escapeHtml(item.category) +
+        '" value="' +
+        item.limit +
+        '" /></div>' +
+        '<div class="prog"><div style="width:' +
+        Math.min(item.percent, 100) +
+        "%;background:" +
+        barClass +
+        '"></div></div>' +
+        '<div class="muted" style="text-align:right;font-size:.75rem;margin-top:.25rem">' +
+        item.percent +
+        "%</div></div>";
+    });
+
+    var historyRows = "";
+    visible.forEach(function (item) {
+      var typCls = item.type === "income" ? "in" : "out";
+      var typLab = item.type === "income" ? "Доход" : "Расход";
+      var amtCls = item.type === "income" ? "inc" : "exp";
+      var sign = item.type === "income" ? "+" : "−";
+      historyRows +=
+        "<tr>" +
+        '<td class="muted">' +
+        escapeHtml(item.date) +
+        "</td>" +
+        '<td><span class="pill ' +
+        typCls +
+        '">' +
+        typLab +
+        "</span></td>" +
+        "<td>" +
+        '<div style="display:flex;align-items:center;gap:.75rem">' +
+        '<div class="avatar sm">' +
+        memberInitial(getMemberName(item.memberId)) +
+        "</div>" +
+        escapeHtml(getMemberName(item.memberId)) +
+        "</div></td>" +
+        "<td>" +
+        escapeHtml(getCategoryLabel(item)) +
+        "</td>" +
+        '<td class="muted">' +
+        escapeHtml(item.note || "—") +
+        "</td>" +
+        '<td class="' +
+        amtCls +
+        '" style="text-align:right;font-weight:700">' +
+        sign +
+        escapeHtml(currency.format(item.amount)) +
+        "</td>" +
+        '<td><div class="tbl-actions">' +
+        '<button type="button" class="icon-btn" data-edit="' +
+        escapeHtml(item.id) +
+        '" title="Редактировать">✎</button>' +
+        '<button type="button" class="icon-btn del" data-del="' +
+        escapeHtml(item.id) +
+        '" title="Удалить">🗑</button>' +
+        "</div></td></tr>";
+    });
+
+    var tipsHtml = "";
+    tips.forEach(function (t) {
+      tipsHtml += '<div class="tip">' + escapeHtml(t) + "</div>";
+    });
+
+    var memberCards = "";
+    FAMILY_MEMBERS.forEach(function (member) {
+      var income = sumAmounts(period, function (i) {
+        return i.memberId === member.id && i.type === "income";
+      });
+      var expense = sumAmounts(period, function (i) {
+        return i.memberId === member.id && i.type === "expense";
+      });
+      memberCards +=
+        '<button type="button" class="mem-btn' +
+        (state.form.memberId === member.id && !state.editingId ? " selected" : "") +
+        '" data-select-member="' +
+        escapeHtml(member.id) +
+        '" title="Добавить операцию для ' +
+        escapeHtml(member.name) +
+        '">' +
+        '<div class="mem-row">' +
+        '<div class="avatar">' +
+        memberInitial(member.name) +
+        "</div>" +
+        "<div><div style=\"font-size:1.25rem;font-weight:800\">" +
+        escapeHtml(member.name) +
+        '</div><div class="inc">+ ' +
+        escapeHtml(currency.format(income)) +
+        '</div><div class="exp">− ' +
+        escapeHtml(currency.format(expense)) +
+        "</div></div></div></button>";
+    });
+
+    var catsOptions = (state.form.type === "expense" ? EXPENSE_CATEGORIES : INCOME_CATEGORIES)
+      .map(function (c) {
+        return (
+          '<option value="' +
+          escapeHtml(c) +
+          '"' +
+          (state.form.category === c ? " selected" : "") +
+          ">" +
+          escapeHtml(c) +
+          "</option>"
+        );
+      })
+      .join("");
+
+    var memberOptions = MEMBER_OPTIONS.map(function (m) {
+      return (
+        '<option value="' +
+        escapeHtml(m.id) +
+        '"' +
+        (state.form.memberId === m.id ? " selected" : "") +
+        ">" +
+        escapeHtml(m.name) +
+        "</option>"
+      );
+    }).join("");
+
+    var monthOptions = months
+      .map(function (k) {
+        return '<option value="' + escapeHtml(k) + '">' + escapeHtml(monthLabel(k)) + "</option>";
+      })
+      .join("");
+
+    var customField =
+      state.form.category === "Своя статья"
+        ? '<label class="lbl"><span>Своя статья</span><input class="input" name="customCategory" value="' +
+          escapeHtml(state.form.customCategory) +
+          '" placeholder="Например: ремонт, кружки" /></label>'
+        : "";
+
+    var balanceCls = balance >= 0 ? "pos" : "neg";
+    var headerBalanceCls = balance >= 0 ? "pos" : "neg";
+
+    var html =
+      '<header class="hdr">' +
+      '<div class="hdr-grid">' +
+      "<div>" +
+      '<div class="badge">👪 Семейный бюджет: Алиса, Алина, Гриша и Вика</div>' +
+      "<h1>Калькулятор доходов и расходов</h1>" +
+      '<p class="lead">Работает без установки: сохраните этот файл и откройте в браузере. Данные хранятся на этом компьютере.</p>' +
+      "</div>" +
+      '<div class="balance-box ' +
+      balanceCls +
+      '">' +
+      '<p class="muted">' + (periodLbl ? "Баланс за " + escapeHtml(periodLbl) : "Текущий баланс") + '</p>' +
+      '<p class="big ' +
+      headerBalanceCls +
+      '">' +
+      escapeHtml(currency.format(balance)) +
+      '</p><p class="muted">Норма накопления: ' +
+      savingRate +
+      "%</p></div></div></header>" +
+
+      '<section class="card"><h2>👪 Участники семьи</h2><p class="muted" style="margin:-.5rem 0 1rem">Нажмите на участника, чтобы добавить доход или расход</p><div class="members">' +
+      memberCards +
+      "</div></section>" +
+
+      '<section class="stats">' +
+      '<div class="stat g"><div class="lbl">📈 ' + (periodLbl ? "Доходы (" + escapeHtml(periodLbl) + ")" : "Доходы") + '</div><div class="val">' +
+      escapeHtml(currency.format(totalIncome)) +
+      '</div></div>' +
+      '<div class="stat r"><div class="lbl">📉 ' + (periodLbl ? "Расходы (" + escapeHtml(periodLbl) + ")" : "Расходы") + '</div><div class="val">' +
+      escapeHtml(currency.format(totalExpense)) +
+      '</div></div>' +
+      '<div class="stat ' +
+      (balance >= 0 ? "g" : "r") +
+      '"><div class="lbl">💰 ' + (periodLbl ? "Остаток (" + escapeHtml(periodLbl) + ")" : "Остаток") + '</div><div class="val">' +
+      escapeHtml(currency.format(balance)) +
+      '</div></div>' +
+      '<div class="stat n"><div class="lbl">🐷 ' + (periodLbl ? "Средний расход (" + escapeHtml(periodLbl) + ")" : "Средний расход") + '</div><div class="val">' +
+      escapeHtml(currency.format(averageExpense)) +
+      '</div></div>' +
+      '<div class="stat n"><div class="lbl">🎯 ' + (periodLbl ? "Главная статья (" + escapeHtml(periodLbl) + ")" : "Главная статья") + '</div><div class="val">' +
+      (biggestExpense
+        ? escapeHtml(biggestExpense.name + ": " + currency.format(biggestExpense.value))
+        : "Пока нет") +
+      "</div></div></section>" +
+
+      '<main class="main-grid">' +
+      '<section class="card">' +
+      '<div class="form-head"><h2>' +
+      (state.editingId
+        ? "Редактировать операцию"
+        : state.form.memberId !== "all"
+          ? "Добавить операцию — " + escapeHtml(getMemberName(state.form.memberId))
+          : "Добавить операцию") +
+      "</h2>" +
+      (state.editingId
+        ? '<button type="button" class="cancel-btn" id="btn-cancel-edit">✕ Отмена</button>'
+        : "") +
+      "</div>" +
+      '<form id="main-form">' +
+      '<div class="toggle">' +
+      '<button type="button" class="' +
+      (state.form.type === "expense" ? "on-e" : "off") +
+      '" data-set-type="expense">Расход</button>' +
+      '<button type="button" class="' +
+      (state.form.type === "income" ? "on-i" : "off") +
+      '" data-set-type="income">Доход</button></div>' +
+      '<input type="hidden" name="ftype" value="' +
+      escapeHtml(state.form.type) +
+      '" />' +
+      '<label class="lbl"><span>Участник</span><select class="input" name="memberId">' +
+      memberOptions +
+      "</select></label>" +
+      '<div class="preview-box"><div class="preview-inner">' +
+      '<div class="avatar md">' +
+      memberInitial(getMemberName(state.form.memberId)) +
+      '</div><div><div class="muted">Выбрано</div><strong id="preview-name">' +
+      escapeHtml(getMemberName(state.form.memberId)) +
+      "</strong></div></div></div>" +
+      '<label class="lbl"><span>Категория</span><select class="input" name="category">' +
+      catsOptions +
+      "</select></label>" +
+      customField +
+      '<label class="lbl"><span>Сумма</span><input class="input" name="amount" type="number" min="0" step="1" placeholder="0" value="' +
+      escapeHtml(state.form.amount) +
+      '" /></label>' +
+      '<label class="lbl"><span>Дата</span><input class="input" name="date" type="date" value="' +
+      escapeHtml(state.form.date) +
+      '" /></label>' +
+      '<label class="lbl"><span>Комментарий</span><input class="input" name="note" value="' +
+      escapeHtml(state.form.note) +
+      '" placeholder="Например: магазин" /></label>' +
+      '<button type="submit" class="btn-submit ' +
+      (state.form.type === "expense" ? "e" : "i") +
+      '">' +
+      (state.editingId ? "💾 Сохранить" : "➕ Добавить") +
+      "</button></form>" +
+      '<div class="utils">' +
+      '<button type="button" class="utility-button" id="btn-csv">⬇ CSV</button>' +
+      '<button type="button" class="utility-button" id="btn-json">⬇ JSON</button>' +
+      '<label class="utility-button" style="cursor:pointer">⬆ Импорт<input type="file" id="file-json" accept="application/json,.json" style="display:none" /></label>' +
+      '<button type="button" class="utility-button" id="btn-demo">↺ Пример</button>' +
+      '<button type="button" class="utility-button" id="btn-filters">⚙ Фильтры</button>' +
+      '<button type="button" class="utility-button" id="btn-clear">🗑 Очистить</button></div></section>' +
+
+      '<section class="stack">' +
+      '<div class="tabs-bar"><div class="tabs">' +
+      '<button type="button" class="tab ' +
+      (state.activeTab === "dashboard" ? "on" : "") +
+      '" data-tab="dashboard">📊 Графики</button>' +
+      '<button type="button" class="tab ' +
+      (state.activeTab === "limits" ? "on" : "") +
+      '" data-tab="limits">🎯 Лимиты</button>' +
+      '<button type="button" class="tab ' +
+      (state.activeTab === "history" ? "on" : "") +
+      '" data-tab="history">📅 История</button>' +
+      '<button type="button" class="tab ' +
+      (state.activeTab === "advice" ? "on" : "") +
+      '" data-tab="advice">✓ Советы</button></div></div>' +
+
+      '<div class="panel ' +
+      (state.activeTab === "dashboard" ? "on" : "") +
+      '" id="panel-dashboard">' +
+      catBanner +
+      '<div class="two-chart">' +
+      '<div class="card">' +
+      '<div class="chart-title">' + (periodLbl ? "На что уходит больше денег (" + escapeHtml(periodLbl) + ")" : "На что уходит больше денег") + '</div>' +
+      (byCat.length
+        ? '<div>' + catRows + '</div><div class="pie-legend">' + pieLegend + "</div>"
+        : '<div class="empty">Добавьте расходы, чтобы увидеть диаграмму.</div>') +
+      "</div>" +
+      '<div class="card member-chart">' +
+      '<div class="chart-title">Доходы и расходы по участникам</div>' +
+      memberBars +
+      "</div></div>" +
+      '<div class="card" style="margin-top:1.5rem">' +
+      '<div class="chart-title">' +
+      (periodLbl ? "Расходы по статьям (" + escapeHtml(periodLbl) + ")" : "Расходы по статьям") +
+      "</div>" +
+      (byCat.length
+        ? '<div class="vbar-chart">' + vbarRows + "</div>"
+        : '<div class="empty">Добавьте расходы, чтобы увидеть диаграмму.</div>') +
+      "</div>" +
+      '<div class="card" style="margin-top:1.5rem">' +
+      '<div class="chart-title">Динамика по месяцам</div>' +
+      (monthRows
+        ? '<table class="month-table"><thead><tr><th>Месяц</th><th>Доходы</th><th>Расходы</th><th>Баланс</th></tr></thead><tbody>' +
+          monthRows +
+          "</tbody></table>"
+        : '<div class="empty">Добавьте операции за разные месяцы.</div>') +
+      "</div></div>" +
+
+      '<div class="panel ' +
+      (state.activeTab === "limits" ? "on" : "") +
+      '" id="panel-limits"><div class="card"><h2>🎯 ' + (periodLbl ? "Лимиты за " + escapeHtml(periodLbl) : "Лимиты на текущий месяц") + '</h2>' +
+      limitsHtml +
+      "</div></div>" +
+
+      '<div class="panel ' +
+      (state.activeTab === "history" ? "on" : "") +
+      '" id="panel-history"><div class="card">' +
+      "<h2>История операций</h2>" +
+      '<p class="muted">В фильтре: доходы ' +
+      escapeHtml(currency.format(filteredIncome)) +
+      ", расходы " +
+      escapeHtml(currency.format(filteredExpense)) +
+      "</p>" +
+      '<div class="history-tools">' +
+      '<div class="search-wrap"><span class="search-ico">🔍</span><input class="small-input" id="hist-search" placeholder="Поиск" value="' +
+      escapeHtml(state.searchQuery) +
+      '" /></div>' +
+      '<select class="small-input" id="hist-member">' +
+      MEMBER_OPTIONS.map(function (m) {
+        return (
+          '<option value="' +
+          escapeHtml(m.id) +
+          '"' +
+          (state.filterMember === m.id ? " selected" : "") +
+          ">" +
+          escapeHtml(m.name) +
+          "</option>"
+        );
+      }).join("") +
+      "</select>" +
+      '<select class="small-input" id="hist-type">' +
+      '<option value="all"' +
+      (state.filterType === "all" ? " selected" : "") +
+      ">Все типы</option>" +
+      '<option value="income"' +
+      (state.filterType === "income" ? " selected" : "") +
+      ">Доходы</option>" +
+      '<option value="expense"' +
+      (state.filterType === "expense" ? " selected" : "") +
+      ">Расходы</option></select>" +
+      '<select class="small-input" id="hist-month">' +
+      '<option value="all"' +
+      (state.filterMonth === "all" ? " selected" : "") +
+      ">Все месяцы</option>" +
+      monthOptions +
+      "</select></div>" +
+      (visible.length
+        ? '<div class="table-wrap"><table class="data"><thead><tr><th>Дата</th><th>Тип</th><th>Участник</th><th>Статья</th><th>Комментарий</th><th style="text-align:right">Сумма</th><th style="text-align:right">Действия</th></tr></thead><tbody>' +
+          historyRows +
+          "</tbody></table></div>"
+        : '<div class="empty">Операций по выбранным фильтрам нет.</div>') +
+      "</div></div>" +
+
+      '<div class="panel ' +
+      (state.activeTab === "advice" ? "on" : "") +
+      '" id="panel-advice"><div class="card"><h2>Подсказки по бюджету</h2>' +
+      tipsHtml +
+      "</div></div></section></main>";
+
+    root.innerHTML = html;
+    bindHandlers();
+    var hsEl = document.getElementById("hist-search");
+    if (hsEl && window.__budgetCursor != null) {
+      hsEl.focus();
+      try {
+        hsEl.setSelectionRange(window.__budgetCursor, window.__budgetCursor);
+      } catch (e) {}
+      window.__budgetCursor = null;
+    }
+  }
+
+  function bindHandlers() {
+    document.querySelectorAll("[data-tab]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        state.activeTab = btn.getAttribute("data-tab");
+        render();
+      });
+    });
+
+    document.querySelectorAll("[data-select-member]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        state.editingId = null;
+        state.form.memberId = btn.getAttribute("data-select-member");
+        state.form.amount = "";
+        state.form.note = "";
+        state.form.date = today();
+        if (state.form.category === "Своя статья") state.form.customCategory = "";
+        render();
+        var formEl = document.getElementById("main-form");
+        if (formEl) formEl.scrollIntoView({ behavior: "smooth", block: "start" });
+        var amountInput = document.querySelector('#main-form input[name="amount"]');
+        if (amountInput) amountInput.focus();
+      });
+    });
+
+    document.querySelectorAll("[data-cat-select]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var name = btn.getAttribute("data-cat-select");
+        state.selectedExpenseCategory = state.selectedExpenseCategory === name ? null : name;
+        render();
+      });
+    });
+
+    var clearCatBtn = document.getElementById("btn-clear-cat");
+    if (clearCatBtn) {
+      clearCatBtn.addEventListener("click", function () {
+        state.selectedExpenseCategory = null;
+        render();
+      });
+    }
+
+    document.querySelectorAll("[data-set-type]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var t = btn.getAttribute("data-set-type");
+        state.form.type = t;
+        state.form.category = getDefaultCategory(t);
+        state.form.customCategory = "";
+        render();
+      });
+    });
+
+    var form = document.getElementById("main-form");
+    if (form) {
+      form.addEventListener("submit", function (e) {
+        e.preventDefault();
+        var fd = new FormData(form);
+        var amount = Number(fd.get("amount"));
+        if (!amount || amount <= 0) {
+          alert("Введите корректную сумму");
+          return;
+        }
+        var ftype = fd.get("ftype") || state.form.type;
+        var cat = fd.get("category") || state.form.category;
+        var customCat = (fd.get("customCategory") || "").trim();
+        if (cat === "Своя статья" && !customCat) {
+          alert("Введите название своей статьи");
+          return;
+        }
+        var prepared = {
+          id: state.editingId || createId(),
+          type: ftype,
+          memberId: fd.get("memberId"),
+          category: cat,
+          customCategory: cat === "Своя статья" ? customCat : "",
+          amount: amount,
+          date: fd.get("date"),
+          note: String(fd.get("note") || "").trim(),
+        };
+        if (state.editingId) {
+          state.transactions = state.transactions.map(function (it) {
+            return it.id === state.editingId ? prepared : it;
+          });
+        } else {
+          state.transactions = [prepared].concat(state.transactions);
+        }
+        persist();
+        resetForm(state.form.type);
+        render();
+      });
+
+      var memberSel = form.querySelector('[name="memberId"]');
+      if (memberSel) {
+        memberSel.addEventListener("change", function () {
+          state.form.memberId = memberSel.value;
+          var pn = document.getElementById("preview-name");
+          if (pn) pn.textContent = getMemberName(state.form.memberId);
+        });
+      }
+      var catSel = form.querySelector('[name="category"]');
+      if (catSel) {
+        catSel.addEventListener("change", function () {
+          state.form.category = catSel.value;
+          render();
+        });
+      }
+    }
+
+    var cancel = document.getElementById("btn-cancel-edit");
+    if (cancel) {
+      cancel.addEventListener("click", function () {
+        resetForm();
+        render();
+      });
+    }
+
+    document.getElementById("btn-csv") &&
+      document.getElementById("btn-csv").addEventListener("click", exportCsv);
+    document.getElementById("btn-json") &&
+      document.getElementById("btn-json").addEventListener("click", exportJson);
+    document.getElementById("btn-demo") &&
+      document.getElementById("btn-demo").addEventListener("click", function () {
+        state.transactions = demoTransactions.slice();
+        persist();
+        resetForm();
+        render();
+      });
+    document.getElementById("btn-filters") &&
+      document.getElementById("btn-filters").addEventListener("click", function () {
+        state.filterMember = "all";
+        state.filterType = "all";
+        state.filterMonth = "all";
+        state.searchQuery = "";
+        render();
+      });
+    document.getElementById("btn-clear") &&
+      document.getElementById("btn-clear").addEventListener("click", function () {
+        if (confirm("Удалить все операции?")) {
+          state.transactions = [];
+          persist();
+          resetForm();
+          render();
+        }
+      });
+
+    var fj = document.getElementById("file-json");
+    if (fj) {
+      fj.addEventListener("change", function (ev) {
+        var file = ev.target.files && ev.target.files[0];
+        if (!file) return;
+        var reader = new FileReader();
+        reader.onload = function () {
+          try {
+            var parsed = JSON.parse(String(reader.result));
+            if (!Array.isArray(parsed.transactions)) throw new Error("bad");
+            state.transactions = parsed.transactions;
+            state.limits = mergeLimits(DEFAULT_LIMITS, parsed.limits || {});
+            persist();
+            resetForm();
+            render();
+          } catch (err) {
+            alert("Не получилось импортировать файл. Нужен JSON-экспорт из этого приложения.");
+          }
+        };
+        reader.readAsText(file);
+        ev.target.value = "";
+      });
+    }
+
+    document.querySelectorAll("[data-edit]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var id = btn.getAttribute("data-edit");
+        var item = state.transactions.filter(function (x) {
+          return x.id === id;
+        })[0];
+        if (!item) return;
+        state.editingId = id;
+        state.form = {
+          type: item.type,
+          memberId: item.memberId,
+          category: item.category,
+          customCategory: item.customCategory || "",
+          amount: String(item.amount),
+          date: item.date,
+          note: item.note || "",
+        };
+        render();
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      });
+    });
+
+    document.querySelectorAll("[data-del]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var id = btn.getAttribute("data-del");
+        state.transactions = state.transactions.filter(function (x) {
+          return x.id !== id;
+        });
+        if (state.editingId === id) resetForm();
+        persist();
+        render();
+      });
+    });
+
+    document.querySelectorAll("[data-limit]").forEach(function (inp) {
+      inp.addEventListener("change", function () {
+        var cat = inp.getAttribute("data-limit");
+        state.limits[cat] = Number(inp.value || 0);
+        persist();
+        render();
+      });
+    });
+
+    var hs = document.getElementById("hist-search");
+    if (hs) {
+      hs.addEventListener("input", function () {
+        window.__budgetCursor = hs.selectionStart;
+        state.searchQuery = hs.value;
+        render();
+      });
+    }
+    var hm = document.getElementById("hist-member");
+    if (hm) {
+      hm.addEventListener("change", function () {
+        state.filterMember = hm.value;
+        render();
+      });
+    }
+    var ht = document.getElementById("hist-type");
+    if (ht) {
+      ht.addEventListener("change", function () {
+        state.filterType = ht.value;
+        render();
+      });
+    }
+    var hmth = document.getElementById("hist-month");
+    if (hmth) {
+      hmth.addEventListener("change", function () {
+        state.filterMonth = hmth.value;
+        state.selectedExpenseCategory = null;
+        render();
+      });
+    }
+  }
+
+  function resetForm(keepType) {
+    var t = keepType || state.form.type || "expense";
+    state.editingId = null;
+    state.form = {
+      type: t,
+      memberId: "all",
+      category: getDefaultCategory(t),
+      customCategory: "",
+      amount: "",
+      date: today(),
+      note: "",
+    };
+  }
+
+  function exportCsv() {
+    var header = ["Дата", "Тип", "Участник", "Статья", "Сумма", "Комментарий"];
+    var rows = state.transactions.map(function (item) {
+      return [
+        item.date,
+        item.type === "income" ? "Доход" : "Расход",
+        getMemberName(item.memberId),
+        getCategoryLabel(item),
+        item.amount,
+        item.note || "",
+      ];
+    });
+    var csv = [header].concat(rows).map(function (row) {
+      return row.map(function (cell) {
+        return '"' + String(cell).replace(/"/g, '""') + '"';
+      }).join(";");
+    }).join("\n");
+    var blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
+    downloadBlob(blob, "family-budget.csv");
+  }
+
+  function exportJson() {
+    var blob = new Blob([JSON.stringify({ transactions: state.transactions, limits: state.limits }, null, 2)], {
+      type: "application/json",
+    });
+    downloadBlob(blob, "family-budget-backup.json");
+  }
+
+  function downloadBlob(blob, name) {
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = name;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  loadInitial();
+  if (!state.form.date) state.form.date = today();
+  render();
+})();
+  </script>
+</body>
+</html>

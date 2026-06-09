@@ -269,7 +269,7 @@ export default function App() {
   const amountInputRef = useRef(null);
   const isCompact = useMediaQuery("(max-width: 639px)");
   const chartHeight = isCompact ? 240 : 320;
-  const pieChartHeight = isCompact ? 320 : 400;
+  const pieOnlyHeight = isCompact ? 220 : 260;
   const categoryBarHeight = isCompact ? 260 : 320;
 
   useEffect(() => {
@@ -472,6 +472,16 @@ export default function App() {
     if (!selectedExpenseCategory) return 0;
     return expensesByCategory.find((item) => item.name === selectedExpenseCategory)?.value || 0;
   }, [selectedExpenseCategory, expensesByCategory]);
+
+  const categoryLegendPayload = useMemo(
+    () =>
+      expensesByCategory.map((entry, index) => ({
+        value: entry.name,
+        color: PIE_COLORS[index % PIE_COLORS.length],
+        payload: entry,
+      })),
+    [expensesByCategory]
+  );
 
   const memberBarData = useMemo(() => {
     return MEMBER_OPTIONS.map((member) => ({
@@ -965,15 +975,15 @@ if (saved) {
                   <ChartCard title={periodLabel ? `На что уходит больше денег (${periodLabel})` : "На что уходит больше денег"}>
                     {expensesByCategory.length ? (
                       <div className="px-2 py-4 sm:px-6 sm:py-6">
-                        <ResponsiveContainer width="100%" height={pieChartHeight}>
-                          <PieChart margin={{ top: 32, right: 48, bottom: 32, left: 48 }}>
+                        <ResponsiveContainer width="100%" height={pieOnlyHeight}>
+                          <PieChart margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
                             <Pie
                               data={expensesByCategory}
                               dataKey="value"
                               nameKey="name"
                               cx="50%"
-                              cy="46%"
-                              outerRadius={isCompact ? "52%" : "58%"}
+                              cy="50%"
+                              outerRadius={isCompact ? "78%" : "82%"}
                               label={({ percent }) => `${Math.round(percent * 100)}%`}
                               labelLine={{ stroke: "#94a3b8", strokeWidth: 1 }}
                               onClick={(_, index) => {
@@ -995,21 +1005,13 @@ if (saved) {
                               ))}
                             </Pie>
                             <Tooltip formatter={(value) => currency.format(value)} />
-                            <Legend
-                              verticalAlign="bottom"
-                              layout="horizontal"
-                              align="center"
-                              wrapperStyle={{ paddingTop: 20, fontSize: isCompact ? 11 : 12 }}
-                              content={(props) => (
-                                <CategoryExpenseLegend
-                                  {...props}
-                                  selectedCategory={selectedExpenseCategory}
-                                  onSelect={toggleExpenseCategory}
-                                />
-                              )}
-                            />
                           </PieChart>
                         </ResponsiveContainer>
+                        <CategoryExpenseLegend
+                          payload={categoryLegendPayload}
+                          selectedCategory={selectedExpenseCategory}
+                          onSelect={toggleExpenseCategory}
+                        />
                       </div>
                     ) : (
                       <EmptyState text="Добавьте расходы, чтобы увидеть диаграмму." />
@@ -1489,7 +1491,7 @@ function CategoryExpenseLegend({ payload, selectedCategory, onSelect }) {
   if (!payload?.length) return null;
 
   return (
-    <ul className="flex list-none flex-wrap justify-center gap-x-4 gap-y-2 pt-5">
+    <ul className="mt-4 grid list-none grid-cols-1 gap-2 border-t border-white/10 pt-4 sm:grid-cols-2 lg:grid-cols-3">
       {payload.map((entry) => {
         const name = entry.value;
         const isSelected = selectedCategory === name;
@@ -1500,13 +1502,13 @@ function CategoryExpenseLegend({ payload, selectedCategory, onSelect }) {
             <button
               type="button"
               onClick={() => onSelect(name)}
-              className={`inline-flex cursor-pointer items-center gap-1.5 rounded-lg px-2 py-1 text-left text-xs transition sm:text-sm ${
+              className={`flex w-full cursor-pointer items-center gap-2 rounded-xl px-3 py-2 text-left text-xs transition sm:text-sm ${
                 isSelected ? "bg-sky-500/20 text-sky-200" : "text-slate-300 hover:bg-white/10 hover:text-white"
               }`}
             >
               <span className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ background: entry.color }} />
-              <span>{name}</span>
-              {isSelected && <span className="font-semibold text-white">{currency.format(amount)}</span>}
+              <span className="min-w-0 flex-1 truncate">{name}</span>
+              {isSelected && <span className="shrink-0 font-semibold text-white">{currency.format(amount)}</span>}
             </button>
           </li>
         );

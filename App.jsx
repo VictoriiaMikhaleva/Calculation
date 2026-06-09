@@ -63,6 +63,8 @@ const EXPENSE_CATEGORIES = [
   "Здоровье",
   "Образование",
   "Подарки",
+  "Родители",
+  "Дни Рождения",
   "Путешествия",
   "Связь",
   "Красота",
@@ -91,6 +93,8 @@ const DEFAULT_LIMITS = {
   "Здоровье": 0,
   "Образование": 0,
   "Подарки": 0,
+  "Родители": 0,
+  "Дни Рождения": 0,
   "Путешествия": 0,
   "Связь": 0,
   "Красота": 0,
@@ -218,6 +222,10 @@ function useMediaQuery(query) {
   return matches;
 }
 
+function mergeLimits(saved) {
+  return { ...DEFAULT_LIMITS, ...(saved || {}) };
+}
+
 function loadStoredBudget() {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
@@ -228,7 +236,7 @@ function loadStoredBudget() {
     const parsed = JSON.parse(saved);
     return {
       transactions: Array.isArray(parsed.transactions) ? parsed.transactions : [],
-      limits: parsed.limits || DEFAULT_LIMITS,
+      limits: mergeLimits(parsed.limits),
       revision: typeof parsed.revision === "number" ? parsed.revision : 0,
     };
   } catch {
@@ -255,12 +263,22 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState("");
   const [editingId, setEditingId] = useState(null);
   const [activeTab, setActiveTab] = useState("dashboard");
+  const [selectedExpenseCategory, setSelectedExpenseCategory] = useState(null);
   const mainPanelRef = useRef(null);
   const formPanelRef = useRef(null);
   const amountInputRef = useRef(null);
   const isCompact = useMediaQuery("(max-width: 639px)");
   const chartHeight = isCompact ? 240 : 320;
   const pieChartHeight = isCompact ? 320 : 400;
+  const categoryBarHeight = isCompact ? 260 : 320;
+
+  useEffect(() => {
+    setSelectedExpenseCategory(null);
+  }, [filterMonth]);
+
+  function toggleExpenseCategory(category) {
+    setSelectedExpenseCategory((prev) => (prev === category ? null : category));
+  }
 
   const [form, setForm] = useState({
     type: "expense",
@@ -323,8 +341,9 @@ export default function App() {
         }
 
         if (update.data.limits) {
-          setLimits(update.data.limits);
-          limitsRef.current = update.data.limits;
+          const mergedLimits = mergeLimits(update.data.limits);
+          setLimits(mergedLimits);
+          limitsRef.current = mergedLimits;
         }
 
         revisionRef.current = cloudRevision;
@@ -448,6 +467,11 @@ export default function App() {
   }, [periodTransactions]);
 
   const biggestExpense = expensesByCategory[0] || null;
+
+  const selectedCategoryAmount = useMemo(() => {
+    if (!selectedExpenseCategory) return 0;
+    return expensesByCategory.find((item) => item.name === selectedExpenseCategory)?.value || 0;
+  }, [selectedExpenseCategory, expensesByCategory]);
 
   const memberBarData = useMemo(() => {
     return MEMBER_OPTIONS.map((member) => ({
@@ -687,7 +711,7 @@ if (saved) {
       try {
         const parsed = JSON.parse(String(reader.result));
         if (!Array.isArray(parsed.transactions)) throw new Error("bad file");
-        const nextLimits = parsed.limits || DEFAULT_LIMITS;
+        const nextLimits = mergeLimits(parsed.limits);
         setTransactions(parsed.transactions);
         setLimits(nextLimits);
         transactionsRef.current = parsed.transactions;
@@ -931,6 +955,12 @@ if (saved) {
 
             {activeTab === "dashboard" && (
               <div className="space-y-6">
+                <CategorySelectionBanner
+                  category={selectedExpenseCategory}
+                  amount={selectedCategoryAmount}
+                  onClear={() => setSelectedExpenseCategory(null)}
+                />
+
                 <div className="grid gap-6 xl:grid-cols-2">
                   <ChartCard title={periodLabel ? `На что уходит больше денег (${periodLabel})` : "На что уходит больше денег"}>
                     {expensesByCategory.length ? (
@@ -946,9 +976,22 @@ if (saved) {
                               outerRadius={isCompact ? "52%" : "58%"}
                               label={({ percent }) => `${Math.round(percent * 100)}%`}
                               labelLine={{ stroke: "#94a3b8", strokeWidth: 1 }}
+                              onClick={(_, index) => {
+                                const name = expensesByCategory[index]?.name;
+                                if (name) toggleExpenseCategory(name);
+                              }}
+                              cursor="pointer"
                             >
-                              {expensesByCategory.map((_, index) => (
-                                <Cell key={index} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                              {expensesByCategory.map((entry, index) => (
+                                <Cell
+                                  key={entry.name}
+                                  fill={PIE_COLORS[index % PIE_COLORS.length]}
+                                  opacity={
+                                    selectedExpenseCategory && selectedExpenseCategory !== entry.name ? 0.35 : 1
+                                  }
+                                  stroke={selectedExpenseCategory === entry.name ? "#38bdf8" : undefined}
+                                  strokeWidth={selectedExpenseCategory === entry.name ? 2 : 0}
+                                />
                               ))}
                             </Pie>
                             <Tooltip formatter={(value) => currency.format(value)} />
@@ -957,6 +1000,13 @@ if (saved) {
                               layout="horizontal"
                               align="center"
                               wrapperStyle={{ paddingTop: 20, fontSize: isCompact ? 11 : 12 }}
+                              content={(props) => (
+                                <CategoryExpenseLegend
+                                  {...props}
+                                  selectedCategory={selectedExpenseCategory}
+                                  onSelect={toggleExpenseCategory}
+                                />
+                              )}
                             />
                           </PieChart>
                         </ResponsiveContainer>
@@ -980,6 +1030,57 @@ if (saved) {
                     </ResponsiveContainer>
                   </ChartCard>
                 </div>
+
+                <ChartCard title={periodLabel ? `Расходы по статьям (${periodLabel})` : "Расходы по статьям"}>
+                  {expensesByCategory.length ? (
+                    <ResponsiveContainer width="100%" height={categoryBarHeight}>
+                      <BarChart
+                        data={expensesByCategory}
+                        margin={isCompact ? { left: -8, right: 8, bottom: 56 } : { left: 0, right: 8, bottom: 48 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
+                        <XAxis
+                          dataKey="name"
+                          stroke="#cbd5e1"
+                          interval={0}
+                          height={isCompact ? 72 : 60}
+                          tick={(props) => (
+                            <CategoryAxisTick
+                              {...props}
+                              selectedCategory={selectedExpenseCategory}
+                              onSelect={toggleExpenseCategory}
+                            />
+                          )}
+                        />
+                        <YAxis
+                          stroke="#cbd5e1"
+                          width={isCompact ? 36 : 60}
+                          tick={{ fontSize: 11 }}
+                          tickFormatter={(value) => `${Math.round(value / 1000)}к`}
+                        />
+                        <Tooltip formatter={(value) => currency.format(value)} contentStyle={{ background: "#0f172a", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 16 }} />
+                        <Bar
+                          dataKey="value"
+                          radius={[8, 8, 0, 0]}
+                          cursor="pointer"
+                          onClick={(data) => toggleExpenseCategory(data.name)}
+                        >
+                          {expensesByCategory.map((entry, index) => (
+                            <Cell
+                              key={entry.name}
+                              fill={PIE_COLORS[index % PIE_COLORS.length]}
+                              opacity={
+                                selectedExpenseCategory && selectedExpenseCategory !== entry.name ? 0.35 : 1
+                              }
+                            />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <EmptyState text="Добавьте расходы, чтобы увидеть диаграмму." />
+                  )}
+                </ChartCard>
 
                 <ChartCard title="Динамика по месяцам">
                   {monthlyData.length ? (
@@ -1365,6 +1466,76 @@ function ChartCard({ title, children }) {
       <h2 className="mb-3 text-lg font-bold sm:mb-4 sm:text-xl">{title}</h2>
       {children}
     </div>
+  );
+}
+
+function CategorySelectionBanner({ category, amount, onClear }) {
+  if (!category) return null;
+
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-sky-400/30 bg-sky-500/10 px-4 py-3">
+      <p className="text-sm sm:text-base">
+        <span className="text-slate-300">{category}:</span>{" "}
+        <span className="font-bold text-white">{currency.format(amount)}</span>
+      </p>
+      <button type="button" onClick={onClear} className="text-xs text-slate-400 hover:text-white">
+        Сбросить
+      </button>
+    </div>
+  );
+}
+
+function CategoryExpenseLegend({ payload, selectedCategory, onSelect }) {
+  if (!payload?.length) return null;
+
+  return (
+    <ul className="flex list-none flex-wrap justify-center gap-x-4 gap-y-2 pt-5">
+      {payload.map((entry) => {
+        const name = entry.value;
+        const isSelected = selectedCategory === name;
+        const amount = entry.payload?.value || 0;
+
+        return (
+          <li key={name}>
+            <button
+              type="button"
+              onClick={() => onSelect(name)}
+              className={`inline-flex cursor-pointer items-center gap-1.5 rounded-lg px-2 py-1 text-left text-xs transition sm:text-sm ${
+                isSelected ? "bg-sky-500/20 text-sky-200" : "text-slate-300 hover:bg-white/10 hover:text-white"
+              }`}
+            >
+              <span className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ background: entry.color }} />
+              <span>{name}</span>
+              {isSelected && <span className="font-semibold text-white">{currency.format(amount)}</span>}
+            </button>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+function CategoryAxisTick({ x, y, payload, selectedCategory, onSelect }) {
+  const name = payload?.value;
+  const isSelected = selectedCategory === name;
+
+  return (
+    <g transform={`translate(${x},${y})`}>
+      <text
+        x={0}
+        y={0}
+        dy={12}
+        textAnchor="end"
+        fill={isSelected ? "#38bdf8" : "#cbd5e1"}
+        fontSize={10}
+        fontWeight={isSelected ? 700 : 400}
+        transform="rotate(-28)"
+        style={{ cursor: "pointer" }}
+        onClick={() => onSelect(name)}
+      >
+        {name}
+      </text>
+    </g>
   );
 }
 

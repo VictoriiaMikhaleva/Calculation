@@ -153,6 +153,34 @@
     .bar-fill { height: 100%; border-radius: 9999px; transition: width .2s; }
     .pie-legend { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: 1rem; font-size: .8rem; }
     .pie-item { display: flex; align-items: center; gap: .35rem; }
+    .cat-select-btn {
+      border: none; background: transparent; color: inherit; font: inherit; cursor: pointer;
+      padding: .15rem .35rem; border-radius: .5rem; text-align: left;
+    }
+    .cat-select-btn:hover { background: rgba(255,255,255,.1); color: #fff; }
+    .cat-select-btn.on { background: rgba(56,189,248,.2); color: #7dd3fc; font-weight: 700; }
+    .cat-banner {
+      display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem;
+      margin-bottom: 1rem; border-radius: 1rem; border: 1px solid rgba(56,189,248,.3);
+      background: rgba(56,189,248,.1); padding: .75rem 1rem;
+    }
+    .vbar-chart {
+      display: flex; align-items: flex-end; gap: .5rem; min-height: 220px; padding: 1rem 0 .25rem;
+      overflow-x: auto;
+    }
+    .vbar-item {
+      flex: 1; min-width: 2.75rem; max-width: 4rem; display: flex; flex-direction: column;
+      align-items: center; gap: .35rem;
+    }
+    .vbar-col-wrap { width: 100%; height: 180px; display: flex; align-items: flex-end; justify-content: center; }
+    .vbar-col {
+      width: 100%; max-width: 2.25rem; border-radius: .5rem .5rem 0 0; min-height: 4px;
+      transition: opacity .15s;
+    }
+    .vbar-label {
+      font-size: .62rem; line-height: 1.1; text-align: center; color: #cbd5e1; word-break: break-word;
+    }
+    .vbar-label.on { color: #7dd3fc; font-weight: 700; }
     .dot { width: .65rem; height: .65rem; border-radius: 2px; flex-shrink: 0; }
     .two-chart { display: grid; gap: 1.5rem; }
     @media (min-width: 1280px) { .two-chart { grid-template-columns: repeat(2, 1fr); } }
@@ -221,13 +249,13 @@
   ];
   var MEMBER_OPTIONS = [{ id: "all", name: "Все" }].concat(FAMILY_MEMBERS);
 
-  var EXPENSE_CATEGORIES = ["Еда","Вещи","Кафе","Развлечения","Транспорт","Дом","Здоровье","Образование","Подарки","Путешествия","Связь","Красота","Другое","Своя статья"];
+  var EXPENSE_CATEGORIES = ["Еда","Вещи","Кафе","Развлечения","Транспорт","Дом","Здоровье","Образование","Подарки","Родители","Дни Рождения","Путешествия","Связь","Красота","Другое","Своя статья"];
   var INCOME_CATEGORIES = ["Зарплата","Премия","Подработка","Подарок","Кэшбэк","Возврат","Инвестиции","Своя статья"];
 
   var DEFAULT_LIMITS = {
     "Еда": 60000, "Вещи": 30000, "Кафе": 20000, "Развлечения": 25000, "Транспорт": 15000,
     "Дом": 50000, "Здоровье": 20000, "Образование": 25000, "Подарки": 15000, "Путешествия": 40000,
-    "Связь": 10000, "Красота": 15000, "Другое": 15000,
+    "Связь": 10000, "Красота": 15000, "Другое": 15000, "Родители": 0, "Дни Рождения": 0, "Своя статья": 0,
   };
 
   var PIE_COLORS = ["#ef4444","#f97316","#eab308","#8b5cf6","#06b6d4","#ec4899","#84cc16","#64748b","#14b8a6","#fb7185","#a855f7","#22c55e"];
@@ -255,6 +283,7 @@
     searchQuery: "",
     editingId: null,
     activeTab: "dashboard",
+    selectedExpenseCategory: null,
     form: { type: "expense", memberId: "all", category: "Еда", customCategory: "", amount: "", date: "", note: "" },
   };
 
@@ -545,21 +574,35 @@
     var limData = limitsData();
     var tips = adviceTips(totalIncome, totalExpense, balance, savingRate, biggestExpense, limData);
 
+    var selectedCat = state.selectedExpenseCategory;
+    var selectedCatAmount = 0;
+    byCat.forEach(function (row) {
+      if (row.name === selectedCat) selectedCatAmount = row.value;
+    });
+
     var catRows = "";
     var maxCat = byCat[0] ? byCat[0].value : 1;
     byCat.forEach(function (row, idx) {
       var pct = maxCat ? Math.round((row.value / maxCat) * 100) : 0;
+      var isOn = selectedCat === row.name;
       catRows +=
         '<div class="bar-row">' +
-        '<div class="bar-label"><span>' +
+        '<div class="bar-label"><button type="button" class="cat-select-btn' +
+        (isOn ? " on" : "") +
+        '" data-cat-select="' +
         escapeHtml(row.name) +
-        "</span><span>" +
+        '">' +
+        escapeHtml(row.name) +
+        (isOn ? " — " + escapeHtml(currency.format(row.value)) : "") +
+        '</button><span>' +
         escapeHtml(currency.format(row.value)) +
         "</span></div>" +
         '<div class="bar-track"><div class="bar-fill" style="width:' +
         pct +
         "%;background:" +
         PIE_COLORS[idx % PIE_COLORS.length] +
+        ";opacity:" +
+        (selectedCat && !isOn ? "0.35" : "1") +
         '"></div></div></div>';
     });
 
@@ -569,15 +612,55 @@
     }, 0);
     byCat.forEach(function (row, idx) {
       var pc = sumExp ? Math.round((row.value / sumExp) * 100) : 0;
+      var isOn = selectedCat === row.name;
       pieLegend +=
-        '<span class="pie-item"><span class="dot" style="background:' +
+        '<button type="button" class="pie-item cat-select-btn' +
+        (isOn ? " on" : "") +
+        '" data-cat-select="' +
+        escapeHtml(row.name) +
+        '"><span class="dot" style="background:' +
         PIE_COLORS[idx % PIE_COLORS.length] +
         '"></span> ' +
         escapeHtml(row.name) +
         " " +
         pc +
-        "%</span>";
+        "%" +
+        (isOn ? " — " + escapeHtml(currency.format(row.value)) : "") +
+        "</button>";
     });
+
+    var vbarRows = "";
+    byCat.forEach(function (row, idx) {
+      var pct = maxCat ? Math.round((row.value / maxCat) * 100) : 0;
+      var isOn = selectedCat === row.name;
+      vbarRows +=
+        '<button type="button" class="vbar-item cat-select-btn' +
+        (isOn ? " on" : "") +
+        '" data-cat-select="' +
+        escapeHtml(row.name) +
+        '" title="' +
+        escapeHtml(row.name + ": " + currency.format(row.value)) +
+        '"><div class="vbar-col-wrap"><div class="vbar-col" style="height:' +
+        pct +
+        "%;background:" +
+        PIE_COLORS[idx % PIE_COLORS.length] +
+        ";opacity:" +
+        (selectedCat && !isOn ? "0.35" : "1") +
+        '"></div></div><div class="vbar-label' +
+        (isOn ? " on" : "") +
+        '">' +
+        escapeHtml(row.name) +
+        "</div></button>";
+    });
+
+    var catBanner =
+      selectedCat
+        ? '<div class="cat-banner"><span><span class="muted">' +
+          escapeHtml(selectedCat) +
+          ":</span> <strong>" +
+          escapeHtml(currency.format(selectedCatAmount)) +
+          '</strong></span><button type="button" class="cat-select-btn" id="btn-clear-cat">Сбросить</button></div>'
+        : "";
 
     var memberBars = "";
     MEMBER_OPTIONS.forEach(function (member) {
@@ -887,6 +970,7 @@
       '<div class="panel ' +
       (state.activeTab === "dashboard" ? "on" : "") +
       '" id="panel-dashboard">' +
+      catBanner +
       '<div class="two-chart">' +
       '<div class="card">' +
       '<div class="chart-title">' + (periodLbl ? "На что уходит больше денег (" + escapeHtml(periodLbl) + ")" : "На что уходит больше денег") + '</div>' +
@@ -898,6 +982,14 @@
       '<div class="chart-title">Доходы и расходы по участникам</div>' +
       memberBars +
       "</div></div>" +
+      '<div class="card" style="margin-top:1.5rem">' +
+      '<div class="chart-title">' +
+      (periodLbl ? "Расходы по статьям (" + escapeHtml(periodLbl) + ")" : "Расходы по статьям") +
+      "</div>" +
+      (byCat.length
+        ? '<div class="vbar-chart">' + vbarRows + "</div>"
+        : '<div class="empty">Добавьте расходы, чтобы увидеть диаграмму.</div>') +
+      "</div>" +
       '<div class="card" style="margin-top:1.5rem">' +
       '<div class="chart-title">Динамика по месяцам</div>' +
       (monthRows
@@ -1003,6 +1095,22 @@
         if (amountInput) amountInput.focus();
       });
     });
+
+    document.querySelectorAll("[data-cat-select]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var name = btn.getAttribute("data-cat-select");
+        state.selectedExpenseCategory = state.selectedExpenseCategory === name ? null : name;
+        render();
+      });
+    });
+
+    var clearCatBtn = document.getElementById("btn-clear-cat");
+    if (clearCatBtn) {
+      clearCatBtn.addEventListener("click", function () {
+        state.selectedExpenseCategory = null;
+        render();
+      });
+    }
 
     document.querySelectorAll("[data-set-type]").forEach(function (btn) {
       btn.addEventListener("click", function () {
@@ -1200,6 +1308,7 @@
     if (hmth) {
       hmth.addEventListener("change", function () {
         state.filterMonth = hmth.value;
+        state.selectedExpenseCategory = null;
         render();
       });
     }

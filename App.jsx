@@ -128,6 +128,10 @@ const CHART_TOOLTIP_PROPS = {
   labelStyle: { color: "#cbd5e1" },
 };
 
+function formatChartTooltipValue(value) {
+  return [currency.format(value), ""];
+}
+
 const STORAGE_KEY = "family-budget-app-v4";
 
 const currency = new Intl.NumberFormat("ru-RU", {
@@ -275,6 +279,8 @@ export default function App() {
   const [editingId, setEditingId] = useState(null);
   const [activeTab, setActiveTab] = useState("dashboard");
   const [selectedExpenseCategory, setSelectedExpenseCategory] = useState(null);
+  const [memberDrilldown, setMemberDrilldown] = useState(null);
+  const chartDrilldownRef = useRef(null);
   const mainPanelRef = useRef(null);
   const formPanelRef = useRef(null);
   const amountInputRef = useRef(null);
@@ -285,10 +291,42 @@ export default function App() {
 
   useEffect(() => {
     setSelectedExpenseCategory(null);
+    setMemberDrilldown(null);
   }, [filterMonth]);
 
-  function toggleExpenseCategory(category) {
-    setSelectedExpenseCategory((prev) => (prev === category ? null : category));
+  function openCategoryDrilldown(category) {
+    setMemberDrilldown(null);
+    setSelectedExpenseCategory((prev) => {
+      const next = prev === category ? null : category;
+      if (next) {
+        requestAnimationFrame(() => {
+          chartDrilldownRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        });
+      }
+      return next;
+    });
+  }
+
+  function openMemberDrilldown(memberName, transactionType) {
+    const member = FAMILY_MEMBERS.find((item) => item.name === memberName);
+    if (!member) return;
+
+    setSelectedExpenseCategory(null);
+    setMemberDrilldown((prev) => {
+      const isSame = prev?.memberId === member.id && prev?.transactionType === transactionType;
+      const next = isSame ? null : { memberId: member.id, transactionType, memberName: member.name };
+      if (next) {
+        requestAnimationFrame(() => {
+          chartDrilldownRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        });
+      }
+      return next;
+    });
+  }
+
+  function clearChartDrilldown() {
+    setSelectedExpenseCategory(null);
+    setMemberDrilldown(null);
   }
 
   const [form, setForm] = useState({
@@ -492,6 +530,30 @@ export default function App() {
         payload: entry,
       })),
     [expensesByCategory]
+  );
+
+  const categoryDetailTransactions = useMemo(() => {
+    if (!selectedExpenseCategory) return [];
+
+    return periodTransactions
+      .filter((item) => item.type === "expense" && getCategoryLabel(item) === selectedExpenseCategory)
+      .sort((a, b) => new Date(b.date) - new Date(a.date));
+  }, [periodTransactions, selectedExpenseCategory]);
+
+  const memberDrilldownTransactions = useMemo(() => {
+    if (!memberDrilldown) return [];
+
+    return periodTransactions
+      .filter(
+        (item) =>
+          item.memberId === memberDrilldown.memberId && item.type === memberDrilldown.transactionType
+      )
+      .sort((a, b) => new Date(b.date) - new Date(a.date));
+  }, [periodTransactions, memberDrilldown]);
+
+  const memberDrilldownTotal = useMemo(
+    () => sumAmounts(memberDrilldownTransactions, () => true),
+    [memberDrilldownTransactions]
   );
 
   const memberBarData = useMemo(() => {
@@ -976,12 +1038,6 @@ if (saved) {
 
             {activeTab === "dashboard" && (
               <div className="space-y-6">
-                <CategorySelectionBanner
-                  category={selectedExpenseCategory}
-                  amount={selectedCategoryAmount}
-                  onClear={() => setSelectedExpenseCategory(null)}
-                />
-
                 <div className="grid gap-6 xl:grid-cols-2">
                   <ChartCard title={periodLabel ? `На что уходит больше денег (${periodLabel})` : "На что уходит больше денег"}>
                     {expensesByCategory.length ? (
@@ -999,7 +1055,7 @@ if (saved) {
                               labelLine={{ stroke: "#94a3b8", strokeWidth: 1 }}
                               onClick={(_, index) => {
                                 const name = expensesByCategory[index]?.name;
-                                if (name) toggleExpenseCategory(name);
+                                if (name) openCategoryDrilldown(name);
                               }}
                               cursor="pointer"
                             >
@@ -1015,13 +1071,16 @@ if (saved) {
                                 />
                               ))}
                             </Pie>
-                            <Tooltip formatter={(value) => currency.format(value)} {...CHART_TOOLTIP_PROPS} />
+                            <Tooltip
+                              formatter={(value, name) => [currency.format(value), name]}
+                              {...CHART_TOOLTIP_PROPS}
+                            />
                           </PieChart>
                         </ResponsiveContainer>
                         <CategoryExpenseLegend
                           payload={categoryLegendPayload}
                           selectedCategory={selectedExpenseCategory}
-                          onSelect={toggleExpenseCategory}
+                          onSelect={openCategoryDrilldown}
                         />
                       </div>
                     ) : (
@@ -1035,10 +1094,22 @@ if (saved) {
                         <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
                         <XAxis dataKey="name" stroke="#cbd5e1" tick={{ fontSize: isCompact ? 11 : 12 }} />
                         <YAxis stroke="#cbd5e1" width={isCompact ? 36 : 60} tick={{ fontSize: 11 }} tickFormatter={(value) => `${Math.round(value / 1000)}к`} />
-                        <Tooltip formatter={(value) => currency.format(value)} {...CHART_TOOLTIP_PROPS} />
+                        <Tooltip formatter={formatChartTooltipValue} {...CHART_TOOLTIP_PROPS} />
                         <Legend />
-                        <Bar dataKey="Доходы" fill="#22c55e" radius={[8, 8, 0, 0]} />
-                        <Bar dataKey="Расходы" fill="#ef4444" radius={[8, 8, 0, 0]} />
+                        <Bar
+                          dataKey="Доходы"
+                          fill="#22c55e"
+                          radius={[8, 8, 0, 0]}
+                          cursor="pointer"
+                          onClick={(data) => openMemberDrilldown(data.name, "income")}
+                        />
+                        <Bar
+                          dataKey="Расходы"
+                          fill="#ef4444"
+                          radius={[8, 8, 0, 0]}
+                          cursor="pointer"
+                          onClick={(data) => openMemberDrilldown(data.name, "expense")}
+                        />
                       </BarChart>
                     </ResponsiveContainer>
                   </ChartCard>
@@ -1061,7 +1132,7 @@ if (saved) {
                             <CategoryAxisTick
                               {...props}
                               selectedCategory={selectedExpenseCategory}
-                              onSelect={toggleExpenseCategory}
+                              onSelect={openCategoryDrilldown}
                             />
                           )}
                         />
@@ -1071,12 +1142,12 @@ if (saved) {
                           tick={{ fontSize: 11 }}
                           tickFormatter={(value) => `${Math.round(value / 1000)}к`}
                         />
-                        <Tooltip formatter={(value) => currency.format(value)} {...CHART_TOOLTIP_PROPS} />
+                        <Tooltip formatter={formatChartTooltipValue} {...CHART_TOOLTIP_PROPS} />
                         <Bar
                           dataKey="value"
                           radius={[8, 8, 0, 0]}
                           cursor="pointer"
-                          onClick={(data) => toggleExpenseCategory(data.name)}
+                          onClick={(data) => openCategoryDrilldown(data.name)}
                         >
                           {expensesByCategory.map((entry, index) => (
                             <Cell
@@ -1111,6 +1182,27 @@ if (saved) {
                     </ResponsiveContainer>
                   ) : <EmptyState text="Добавьте операции за разные месяцы, чтобы увидеть динамику." />}
                 </ChartCard>
+
+                {(selectedExpenseCategory || memberDrilldown) && (
+                  <div ref={chartDrilldownRef} className="scroll-mt-4">
+                    <ChartDrilldownTable
+                      title={
+                        selectedExpenseCategory
+                          ? `Операции по статье «${selectedExpenseCategory}»`
+                          : `Операции: ${memberDrilldown.memberName} — ${
+                              memberDrilldown.transactionType === "income" ? "доходы" : "расходы"
+                            }`
+                      }
+                      transactions={
+                        selectedExpenseCategory ? categoryDetailTransactions : memberDrilldownTransactions
+                      }
+                      total={selectedExpenseCategory ? selectedCategoryAmount : memberDrilldownTotal}
+                      onClose={clearChartDrilldown}
+                      onEdit={handleEdit}
+                      onDelete={handleDelete}
+                    />
+                  </div>
+                )}
               </div>
             )}
 
@@ -1482,18 +1574,131 @@ function ChartCard({ title, children }) {
   );
 }
 
-function CategorySelectionBanner({ category, amount, onClear }) {
-  if (!category) return null;
-
+function ChartDrilldownTable({ title, transactions, total, onClose, onEdit, onDelete }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-sky-400/30 bg-sky-500/10 px-4 py-3">
-      <p className="text-sm sm:text-base">
-        <span className="text-slate-300">{category}:</span>{" "}
-        <span className="font-bold text-white">{currency.format(amount)}</span>
-      </p>
-      <button type="button" onClick={onClear} className="text-xs text-slate-400 hover:text-white">
-        Сбросить
-      </button>
+    <div className="rounded-2xl border border-sky-400/30 bg-sky-500/5 p-4 shadow-xl sm:rounded-3xl sm:p-5">
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="text-lg font-bold sm:text-xl">{title}</h3>
+          <p className="mt-1 text-sm text-slate-400">
+            {transactions.length} {transactions.length === 1 ? "операция" : transactions.length < 5 ? "операции" : "операций"}
+            {" · "}итого {currency.format(total)}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="inline-flex items-center gap-1.5 rounded-xl bg-white/10 px-3 py-2 text-sm text-slate-300 hover:bg-white/15 hover:text-white"
+        >
+          <X size={16} /> Закрыть
+        </button>
+      </div>
+
+      {!transactions.length ? (
+        <EmptyState text="Операций по выбранному фильтру нет." />
+      ) : (
+        <>
+          <div className="space-y-3 md:hidden">
+            {transactions.map((item) => (
+              <article
+                key={item.id}
+                className="space-y-3 rounded-2xl border border-white/10 bg-slate-900/70 p-4"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm text-slate-400">{formatDisplayDate(item.date)}</span>
+                  <span
+                    className={`rounded-full px-3 py-1 text-xs font-bold ${
+                      item.type === "income" ? "bg-green-500/15 text-green-400" : "bg-red-500/15 text-red-400"
+                    }`}
+                  >
+                    {item.type === "income" ? "Доход" : "Расход"}
+                  </span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <MemberAvatar name={getMemberName(item.memberId)} photo={getMemberPhoto(item.memberId)} size="sm" />
+                  <span className="font-medium">{getMemberName(item.memberId)}</span>
+                </div>
+                <p className="text-sm text-slate-200">{getCategoryLabel(item)}</p>
+                <p className="text-sm text-slate-400">{item.note || "—"}</p>
+                <p className={`text-lg font-bold ${item.type === "income" ? "text-green-400" : "text-red-400"}`}>
+                  {item.type === "income" ? "+" : "-"}
+                  {currency.format(item.amount)}
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => onEdit(item)}
+                    className="flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl bg-white/10 text-sm text-slate-200"
+                  >
+                    <Pencil size={16} /> Изменить
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onDelete(item.id)}
+                    className="flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl bg-red-500/10 text-sm text-red-400"
+                  >
+                    <Trash2 size={16} /> Удалить
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
+
+          <div className="hidden overflow-x-auto rounded-2xl border border-white/10 md:block">
+            <table className="w-full min-w-[760px] border-collapse text-left text-sm">
+              <thead className="bg-slate-900 text-slate-300">
+                <tr>
+                  <th className="p-3">Дата</th>
+                  <th className="p-3">Участник</th>
+                  <th className="p-3">Статья</th>
+                  <th className="p-3">Комментарий</th>
+                  <th className="p-3 text-right">Сумма</th>
+                  <th className="p-3 text-right">Действия</th>
+                </tr>
+              </thead>
+              <tbody>
+                {transactions.map((item) => (
+                  <tr key={item.id} className="border-t border-white/10 hover:bg-white/5">
+                    <td className="p-3 text-slate-300">{formatDisplayDate(item.date)}</td>
+                    <td className="p-3">
+                      <div className="flex items-center gap-3">
+                        <MemberAvatar name={getMemberName(item.memberId)} photo={getMemberPhoto(item.memberId)} size="sm" />
+                        <span>{getMemberName(item.memberId)}</span>
+                      </div>
+                    </td>
+                    <td className="p-3">{getCategoryLabel(item)}</td>
+                    <td className="p-3 text-slate-400">{item.note || "—"}</td>
+                    <td className={`p-3 text-right font-bold ${item.type === "income" ? "text-green-400" : "text-red-400"}`}>
+                      {item.type === "income" ? "+" : "-"}
+                      {currency.format(item.amount)}
+                    </td>
+                    <td className="p-3">
+                      <div className="flex justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => onEdit(item)}
+                          className="rounded-xl p-2 text-slate-400 hover:bg-white/10 hover:text-white"
+                          title="Редактировать"
+                        >
+                          <Pencil size={16} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onDelete(item.id)}
+                          className="rounded-xl p-2 text-slate-400 hover:bg-red-500/15 hover:text-red-400"
+                          title="Удалить"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
     </div>
   );
 }

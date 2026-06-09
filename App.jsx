@@ -117,6 +117,17 @@ const PIE_COLORS = [
   "#22c55e",
 ];
 
+const CHART_TOOLTIP_PROPS = {
+  contentStyle: {
+    background: "#0f172a",
+    border: "1px solid rgba(255,255,255,0.1)",
+    borderRadius: 16,
+    color: "#f8fafc",
+  },
+  itemStyle: { color: "#f8fafc" },
+  labelStyle: { color: "#cbd5e1" },
+};
+
 const STORAGE_KEY = "family-budget-app-v4";
 
 const currency = new Intl.NumberFormat("ru-RU", {
@@ -1004,7 +1015,7 @@ if (saved) {
                                 />
                               ))}
                             </Pie>
-                            <Tooltip formatter={(value) => currency.format(value)} />
+                            <Tooltip formatter={(value) => currency.format(value)} {...CHART_TOOLTIP_PROPS} />
                           </PieChart>
                         </ResponsiveContainer>
                         <CategoryExpenseLegend
@@ -1024,7 +1035,7 @@ if (saved) {
                         <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
                         <XAxis dataKey="name" stroke="#cbd5e1" tick={{ fontSize: isCompact ? 11 : 12 }} />
                         <YAxis stroke="#cbd5e1" width={isCompact ? 36 : 60} tick={{ fontSize: 11 }} tickFormatter={(value) => `${Math.round(value / 1000)}к`} />
-                        <Tooltip formatter={(value) => currency.format(value)} contentStyle={{ background: "#0f172a", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 16 }} />
+                        <Tooltip formatter={(value) => currency.format(value)} {...CHART_TOOLTIP_PROPS} />
                         <Legend />
                         <Bar dataKey="Доходы" fill="#22c55e" radius={[8, 8, 0, 0]} />
                         <Bar dataKey="Расходы" fill="#ef4444" radius={[8, 8, 0, 0]} />
@@ -1060,7 +1071,7 @@ if (saved) {
                           tick={{ fontSize: 11 }}
                           tickFormatter={(value) => `${Math.round(value / 1000)}к`}
                         />
-                        <Tooltip formatter={(value) => currency.format(value)} contentStyle={{ background: "#0f172a", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 16 }} />
+                        <Tooltip formatter={(value) => currency.format(value)} {...CHART_TOOLTIP_PROPS} />
                         <Bar
                           dataKey="value"
                           radius={[8, 8, 0, 0]}
@@ -1091,7 +1102,7 @@ if (saved) {
                         <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
                         <XAxis dataKey="month" stroke="#cbd5e1" tick={{ fontSize: 11 }} />
                         <YAxis stroke="#cbd5e1" width={isCompact ? 36 : 60} tick={{ fontSize: 11 }} tickFormatter={(value) => `${Math.round(value / 1000)}к`} />
-                        <Tooltip formatter={(value) => currency.format(value)} contentStyle={{ background: "#0f172a", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 16 }} />
+                        <Tooltip formatter={(value) => currency.format(value)} {...CHART_TOOLTIP_PROPS} />
                         <Legend />
                         <Area type="monotone" dataKey="Доходы" stroke="#22c55e" fill="#22c55e" fillOpacity={0.18} />
                         <Area type="monotone" dataKey="Расходы" stroke="#ef4444" fill="#ef4444" fillOpacity={0.18} />

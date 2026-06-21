@@ -21,6 +21,7 @@ import {
   Download,
   Filter,
   LineChart,
+  Archive,
   PiggyBank,
   Plus,
   Search,
@@ -249,6 +250,49 @@ function groupTransactionsByMonth(items) {
     .sort((a, b) => b.key.localeCompare(a.key));
 }
 
+function buildMonthSummary(key, monthTransactions) {
+  const income = sumAmounts(monthTransactions, (item) => item.type === "income");
+  const expense = sumAmounts(monthTransactions, (item) => item.type === "expense");
+  const balance = income - expense;
+  const savingRate = income > 0 ? Math.round((balance / income) * 100) : 0;
+
+  const categoryMap = new Map();
+  monthTransactions
+    .filter((item) => item.type === "expense")
+    .forEach((item) => {
+      const label = getCategoryLabel(item);
+      categoryMap.set(label, (categoryMap.get(label) || 0) + Number(item.amount || 0));
+    });
+
+  const byCategory = [...categoryMap.entries()]
+    .map(([name, value]) => ({ name, value }))
+    .sort((a, b) => b.value - a.value);
+
+  const byMember = FAMILY_MEMBERS.map((member) => ({
+    memberId: member.id,
+    name: member.name,
+    income: sumAmounts(monthTransactions, (item) => item.memberId === member.id && item.type === "income"),
+    expense: sumAmounts(monthTransactions, (item) => item.memberId === member.id && item.type === "expense"),
+  }));
+
+  const biggestExpense = byCategory[0] || null;
+
+  return {
+    monthKey: key,
+    title: formatMonthGroupTitle(key),
+    closedAt: today(),
+    income,
+    expense,
+    balance,
+    savingRate,
+    transactionCount: monthTransactions.length,
+    biggestExpense: biggestExpense ? `${biggestExpense.name}: ${currency.format(biggestExpense.value)}` : "—",
+    byCategory,
+    byMember,
+    transactions: monthTransactions,
+  };
+}
+
 function formatDayTotal(group) {
   const parts = [];
 
@@ -288,17 +332,18 @@ function loadStoredBudget() {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (!saved) {
-      return { transactions: [], limits: DEFAULT_LIMITS, revision: 0 };
+      return { transactions: [], limits: DEFAULT_LIMITS, monthSummaries: [], revision: 0 };
     }
 
     const parsed = JSON.parse(saved);
     return {
       transactions: Array.isArray(parsed.transactions) ? parsed.transactions : [],
       limits: mergeLimits(parsed.limits),
+      monthSummaries: Array.isArray(parsed.monthSummaries) ? parsed.monthSummaries : [],
       revision: typeof parsed.revision === "number" ? parsed.revision : 0,
     };
   } catch {
-    return { transactions: [], limits: DEFAULT_LIMITS, revision: 0 };
+    return { transactions: [], limits: DEFAULT_LIMITS, monthSummaries: [], revision: 0 };
   }
 }
 
@@ -311,9 +356,11 @@ export default function App() {
   const revisionRef = useRef(initialBudget.revision);
   const transactionsRef = useRef(initialBudget.transactions);
   const limitsRef = useRef(initialBudget.limits);
+  const monthSummariesRef = useRef(initialBudget.monthSummaries);
 
   const [transactions, setTransactions] = useState(initialBudget.transactions);
   const [limits, setLimits] = useState(initialBudget.limits);
+  const [monthSummaries, setMonthSummaries] = useState(initialBudget.monthSummaries);
 
   const [filterMember, setFilterMember] = useState("all");
   const [filterType, setFilterType] = useState("all");
@@ -323,6 +370,8 @@ export default function App() {
   const [activeTab, setActiveTab] = useState("dashboard");
   const [selectedExpenseCategory, setSelectedExpenseCategory] = useState(null);
   const [memberDrilldown, setMemberDrilldown] = useState(null);
+  const [monthToClose, setMonthToClose] = useState("");
+  const [expandedArchiveKey, setExpandedArchiveKey] = useState(null);
   const chartDrilldownRef = useRef(null);
   const mainPanelRef = useRef(null);
   const formPanelRef = useRef(null);
@@ -438,6 +487,11 @@ export default function App() {
           limitsRef.current = mergedLimits;
         }
 
+        if (Array.isArray(update.data.monthSummaries)) {
+          setMonthSummaries(update.data.monthSummaries);
+          monthSummariesRef.current = update.data.monthSummaries;
+        }
+
         revisionRef.current = cloudRevision;
         cloudLoadedRef.current = true;
 
@@ -465,17 +519,19 @@ export default function App() {
         JSON.stringify({
           transactions,
           limits,
+          monthSummaries,
           revision: revisionRef.current,
         })
       );
     } catch (error) {
       console.error("Не удалось сохранить в localStorage:", error);
     }
-  }, [transactions, limits]);
+  }, [transactions, limits, monthSummaries]);
 
   async function saveCurrentBudgetToCloud(
     nextTransactions = transactionsRef.current,
-    nextLimits = limitsRef.current
+    nextLimits = limitsRef.current,
+    nextMonthSummaries = monthSummariesRef.current
   ) {
     const nextRevision = revisionRef.current + 1;
     revisionRef.current = nextRevision;
@@ -484,6 +540,7 @@ export default function App() {
       await saveBudgetToCloud({
         transactions: nextTransactions,
         limits: nextLimits,
+        monthSummaries: nextMonthSummaries,
         revision: nextRevision,
       });
       return true;
@@ -498,6 +555,25 @@ export default function App() {
     const months = [...new Set(transactions.map((item) => monthKey(item.date)))].sort().reverse();
     return months;
   }, [transactions]);
+
+  const closedMonthKeys = useMemo(
+    () => new Set(monthSummaries.map((summary) => summary.monthKey)),
+    [monthSummaries]
+  );
+
+  const closableMonths = useMemo(
+    () => availableMonths.filter((key) => !closedMonthKeys.has(key)),
+    [availableMonths, closedMonthKeys]
+  );
+
+  const effectiveMonthToClose = monthToClose || closableMonths[0] || "";
+
+  const monthClosePreview = useMemo(() => {
+    if (!effectiveMonthToClose) return null;
+    const monthItems = transactions.filter((item) => monthKey(item.date) === effectiveMonthToClose);
+    if (!monthItems.length) return null;
+    return buildMonthSummary(effectiveMonthToClose, monthItems);
+  }, [effectiveMonthToClose, transactions]);
 
   const periodTransactions = useMemo(() => {
     if (filterMonth === "all") return transactions;
@@ -794,6 +870,52 @@ if (saved) {
     setSearchQuery("");
   }
 
+  async function handleCloseMonth() {
+    const keyToClose = monthToClose || closableMonths[0];
+    if (!keyToClose) {
+      alert("Выберите месяц для закрытия.");
+      return;
+    }
+
+    const monthItems = transactions.filter((item) => monthKey(item.date) === keyToClose);
+    if (!monthItems.length) {
+      alert("В этом месяце нет операций.");
+      return;
+    }
+
+    const preview = buildMonthSummary(keyToClose, monthItems);
+    const confirmed = window.confirm(
+      `Закрыть ${preview.title}?\n\n` +
+        `Доходы: ${currency.format(preview.income)}\n` +
+        `Расходы: ${currency.format(preview.expense)}\n` +
+        `Баланс: ${currency.format(preview.balance)}\n` +
+        `Операций: ${preview.transactionCount}\n\n` +
+        `Месяц сохранится в архиве «Итоги», а операции уберутся из текущего расчёта — можно начинать новый месяц с чистого листа.`
+    );
+    if (!confirmed) return;
+
+    const nextSummaries = [preview, ...monthSummaries.filter((summary) => summary.monthKey !== keyToClose)].sort(
+      (a, b) => b.monthKey.localeCompare(a.monthKey)
+    );
+    const nextTransactions = transactions.filter((item) => monthKey(item.date) !== keyToClose);
+
+    setMonthSummaries(nextSummaries);
+    monthSummariesRef.current = nextSummaries;
+    setTransactions(nextTransactions);
+    transactionsRef.current = nextTransactions;
+    setMonthToClose("");
+    setExpandedArchiveKey(preview.monthKey);
+    setFilterMonth(monthKey(today()));
+    setActiveTab("summaries");
+    clearChartDrilldown();
+    resetForm();
+
+    const saved = await saveCurrentBudgetToCloud(nextTransactions, limitsRef.current, nextSummaries);
+    if (!saved) {
+      alert("Месяц закрыт на экране, но не сохранился в облако. Не обновляйте страницу.");
+    }
+  }
+
   function exportCsv() {
     const header = ["Дата", "Тип", "Участник", "Статья", "Сумма", "Комментарий"];
     const rows = transactions.map((item) => [
@@ -819,7 +941,10 @@ if (saved) {
   }
 
   function exportJson() {
-    const blob = new Blob([JSON.stringify({ transactions, limits }, null, 2)], { type: "application/json" });
+    const blob = new Blob(
+      [JSON.stringify({ transactions, limits, monthSummaries }, null, 2)],
+      { type: "application/json" }
+    );
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
@@ -838,11 +963,14 @@ if (saved) {
         const parsed = JSON.parse(String(reader.result));
         if (!Array.isArray(parsed.transactions)) throw new Error("bad file");
         const nextLimits = mergeLimits(parsed.limits);
+        const nextSummaries = Array.isArray(parsed.monthSummaries) ? parsed.monthSummaries : [];
         setTransactions(parsed.transactions);
         setLimits(nextLimits);
+        setMonthSummaries(nextSummaries);
         transactionsRef.current = parsed.transactions;
         limitsRef.current = nextLimits;
-        await saveCurrentBudgetToCloud(parsed.transactions, nextLimits);
+        monthSummariesRef.current = nextSummaries;
+        await saveCurrentBudgetToCloud(parsed.transactions, nextLimits, nextSummaries);
         resetForm();
       } catch {
         alert("Не получилось импортировать файл. Проверьте, что это JSON-экспорт из этого приложения.");
@@ -1071,10 +1199,11 @@ if (saved) {
 
           <section className="space-y-6">
             <div className="rounded-3xl border border-white/10 bg-white/5 p-2 shadow-xl">
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">
                 <TabButton active={activeTab === "dashboard"} onClick={() => setActiveTab("dashboard")} icon={<LineChart size={16} />} label="Графики" compact={isCompact} />
                 <TabButton active={activeTab === "limits"} onClick={() => setActiveTab("limits")} icon={<Target size={16} />} label="Лимиты" compact={isCompact} />
                 <TabButton active={activeTab === "history"} onClick={() => setActiveTab("history")} icon={<CalendarDays size={16} />} label="История" compact={isCompact} />
+                <TabButton active={activeTab === "summaries"} onClick={() => setActiveTab("summaries")} icon={<Archive size={16} />} label="Итоги" compact={isCompact} />
                 <TabButton active={activeTab === "advice"} onClick={() => setActiveTab("advice")} icon={<CheckCircle2 size={16} />} label="Советы" compact={isCompact} />
               </div>
             </div>
@@ -1491,6 +1620,97 @@ if (saved) {
                 </div>
               </div>
             )}
+
+            {activeTab === "summaries" && (
+              <div className="space-y-6">
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-4 shadow-xl sm:rounded-3xl sm:p-5">
+                  <div className="mb-4 flex items-center gap-2">
+                    <Archive size={20} />
+                    <h2 className="text-xl font-bold sm:text-2xl">Закрыть месяц и начать заново</h2>
+                  </div>
+                  <p className="mb-4 text-sm text-slate-400">
+                    Подведите итог месяца: доходы, расходы и баланс сохранятся в архиве. Операции этого месяца уберутся из
+                    текущего расчёта — можно вести новый месяц с чистого листа. Архив всегда можно посмотреть ниже.
+                  </p>
+
+                  {closableMonths.length ? (
+                    <div className="space-y-4">
+                      <Field label="Месяц для закрытия">
+                        <select
+                          className="input"
+                          value={effectiveMonthToClose}
+                          onChange={(e) => setMonthToClose(e.target.value)}
+                        >
+                          {closableMonths.map((key) => (
+                            <option key={key} value={key}>
+                              {formatMonthGroupTitle(key)}
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
+
+                      {monthClosePreview && (
+                        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                          <div className="rounded-2xl border border-green-500/20 bg-green-500/10 p-3">
+                            <p className="text-xs text-slate-400">Доходы</p>
+                            <p className="text-lg font-bold text-green-400">{currency.format(monthClosePreview.income)}</p>
+                          </div>
+                          <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-3">
+                            <p className="text-xs text-slate-400">Расходы</p>
+                            <p className="text-lg font-bold text-red-400">{currency.format(monthClosePreview.expense)}</p>
+                          </div>
+                          <div className={`rounded-2xl border p-3 ${monthClosePreview.balance >= 0 ? "border-green-500/20 bg-green-500/10" : "border-red-500/20 bg-red-500/10"}`}>
+                            <p className="text-xs text-slate-400">Баланс</p>
+                            <p className={`text-lg font-bold ${monthClosePreview.balance >= 0 ? "text-green-400" : "text-red-400"}`}>
+                              {currency.format(monthClosePreview.balance)}
+                            </p>
+                          </div>
+                          <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                            <p className="text-xs text-slate-400">Операций</p>
+                            <p className="text-lg font-bold text-white">{monthClosePreview.transactionCount}</p>
+                          </div>
+                        </div>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={handleCloseMonth}
+                        className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-2xl bg-sky-500 px-5 py-3 font-bold text-white transition hover:bg-sky-400"
+                      >
+                        <Archive size={18} />
+                        Закрыть месяц и заархивировать
+                      </button>
+                    </div>
+                  ) : (
+                    <EmptyState text="Все месяцы с операциями уже закрыты, или пока нет данных для закрытия." />
+                  )}
+                </div>
+
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-4 shadow-xl sm:rounded-3xl sm:p-5">
+                  <div className="mb-4 flex items-center gap-2">
+                    <CalendarDays size={20} />
+                    <h2 className="text-xl font-bold sm:text-2xl">Архив закрытых месяцев</h2>
+                  </div>
+
+                  {monthSummaries.length ? (
+                    <div className="space-y-4">
+                      {monthSummaries.map((summary) => (
+                        <MonthArchiveCard
+                          key={summary.monthKey}
+                          summary={summary}
+                          expanded={expandedArchiveKey === summary.monthKey}
+                          onToggle={() =>
+                            setExpandedArchiveKey((prev) => (prev === summary.monthKey ? null : summary.monthKey))
+                          }
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <EmptyState text="Закрытых месяцев пока нет. Когда месяц закончится, закройте его здесь." />
+                  )}
+                </div>
+              </div>
+            )}
           </section>
         </main>
 
@@ -1613,6 +1833,110 @@ function ChartCard({ title, children }) {
     <div className="rounded-2xl border border-white/10 bg-white/5 p-4 shadow-xl sm:rounded-3xl sm:p-5">
       <h2 className="mb-3 text-lg font-bold sm:mb-4 sm:text-xl">{title}</h2>
       {children}
+    </div>
+  );
+}
+
+function MonthArchiveCard({ summary, expanded, onToggle }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-slate-900/70 p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="text-lg font-bold text-white">{summary.title}</h3>
+          <p className="mt-1 text-sm text-slate-400">
+            Закрыт {formatDisplayDate(summary.closedAt)} · {summary.transactionCount} операций · накопление {summary.savingRate}%
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onToggle}
+          className="rounded-xl bg-white/10 px-3 py-2 text-sm text-slate-200 hover:bg-white/15"
+        >
+          {expanded ? "Скрыть" : "Подробнее"}
+        </button>
+      </div>
+
+      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div>
+          <p className="text-xs text-slate-400">Доходы</p>
+          <p className="font-bold text-green-400">{currency.format(summary.income)}</p>
+        </div>
+        <div>
+          <p className="text-xs text-slate-400">Расходы</p>
+          <p className="font-bold text-red-400">{currency.format(summary.expense)}</p>
+        </div>
+        <div>
+          <p className="text-xs text-slate-400">Баланс</p>
+          <p className={`font-bold ${summary.balance >= 0 ? "text-green-400" : "text-red-400"}`}>
+            {currency.format(summary.balance)}
+          </p>
+        </div>
+        <div>
+          <p className="text-xs text-slate-400">Главная статья</p>
+          <p className="text-sm font-semibold text-slate-200">{summary.biggestExpense}</p>
+        </div>
+      </div>
+
+      {expanded && (
+        <div className="mt-4 space-y-4 border-t border-white/10 pt-4">
+          <div>
+            <p className="mb-2 text-sm font-semibold text-slate-300">По участникам</p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {summary.byMember.map((member) => (
+                <div key={member.memberId} className="rounded-xl border border-white/10 bg-slate-950/50 px-3 py-2 text-sm">
+                  <span className="font-medium text-white">{member.name}</span>
+                  <span className="text-slate-400">
+                    {" · "}+{currency.format(member.income)} / -{currency.format(member.expense)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {summary.byCategory?.length > 0 && (
+            <div>
+              <p className="mb-2 text-sm font-semibold text-slate-300">По статьям расходов</p>
+              <div className="space-y-2">
+                {summary.byCategory.slice(0, 8).map((row) => (
+                  <div key={row.name} className="flex items-center justify-between gap-2 text-sm">
+                    <span className="text-slate-300">{row.name}</span>
+                    <span className="font-semibold text-red-400">{currency.format(row.value)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="overflow-x-auto rounded-xl border border-white/10">
+            <table className="w-full min-w-[640px] border-collapse text-left text-sm">
+              <thead className="bg-slate-950 text-slate-400">
+                <tr>
+                  <th className="p-2">Дата</th>
+                  <th className="p-2">Участник</th>
+                  <th className="p-2">Статья</th>
+                  <th className="p-2 text-right">Сумма</th>
+                </tr>
+              </thead>
+              <tbody>
+                {summary.transactions
+                  .slice()
+                  .sort((a, b) => new Date(b.date) - new Date(a.date))
+                  .map((item) => (
+                    <tr key={item.id} className="border-t border-white/10">
+                      <td className="p-2 text-slate-300">{formatDisplayDate(item.date)}</td>
+                      <td className="p-2">{getMemberName(item.memberId)}</td>
+                      <td className="p-2">{getCategoryLabel(item)}</td>
+                      <td className={`p-2 text-right font-semibold ${item.type === "income" ? "text-green-400" : "text-red-400"}`}>
+                        {item.type === "income" ? "+" : "-"}
+                        {currency.format(item.amount)}
+                      </td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

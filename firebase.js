@@ -26,12 +26,13 @@ export function getBudgetDocRef() {
   return doc(db, "budgets", FAMILY_BUDGET_ID);
 }
 
-export async function saveBudgetToCloud({ transactions, limits, revision }) {
+export async function saveBudgetToCloud({ transactions, limits, revision, monthSummaries = [] }) {
   await setDoc(
     getBudgetDocRef(),
     {
       transactions,
       limits,
+      monthSummaries,
       revision,
       updatedAt: serverTimestamp(),
     },

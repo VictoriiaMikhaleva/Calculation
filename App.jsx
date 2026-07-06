@@ -279,6 +279,42 @@ function parseVoiceTransaction(text) {
   return { amount, type, category, memberId, note };
 }
 
+function isSpeechRecognitionSupported() {
+  return Boolean(window.SpeechRecognition || window.webkitSpeechRecognition);
+}
+
+function isIosDevice() {
+  return (
+    /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)
+  );
+}
+
+function getVoiceInputHint() {
+  if (isSpeechRecognitionSupported()) return "";
+  if (isIosDevice()) {
+    return "На iPhone в браузере голосовой ввод недоступен. Нажмите микрофон на клавиатуре в поле «Комментарий» или откройте сайт в Chrome на Android.";
+  }
+  return "Голосовой ввод работает в Chrome и Edge на компьютере и Android.";
+}
+
+function getVoiceRecognitionErrorMessage(errorCode) {
+  switch (errorCode) {
+    case "not-allowed":
+      return "Разрешите доступ к микрофону в настройках браузера и попробуйте снова.";
+    case "service-not-allowed":
+      return "Браузер заблокировал голосовой ввод. Откройте сайт в Chrome.";
+    case "network":
+      return "Нужен интернет для распознавания речи. Проверьте соединение.";
+    case "no-speech":
+      return "Речь не распознана. Попробуйте ещё раз и говорите чуть громче.";
+    case "audio-capture":
+      return "Микрофон недоступен. Проверьте разрешения в настройках телефона.";
+    default:
+      return "Не удалось распознать речь. Попробуйте ещё раз.";
+  }
+}
+
 function sumAmounts(items, condition) {
   return items.reduce((sum, item) => (condition(item) ? sum + Number(item.amount || 0) : sum), 0);
 }
@@ -457,6 +493,8 @@ export default function App() {
   const amountInputRef = useRef(null);
   const recognitionRef = useRef(null);
   const [isListening, setIsListening] = useState(false);
+  const [voiceInputSupported] = useState(() => isSpeechRecognitionSupported());
+  const voiceInputHint = useMemo(() => getVoiceInputHint(), []);
   const isCompact = useMediaQuery("(max-width: 639px)");
   const chartHeight = isCompact ? 240 : 320;
   const pieOnlyHeight = isCompact ? 220 : 260;
@@ -874,7 +912,7 @@ export default function App() {
   function handleVoiceInput() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      alert("Ваш браузер не поддерживает голосовой ввод");
+      alert(getVoiceInputHint() || "Ваш браузер не поддерживает голосовой ввод");
       return;
     }
 
@@ -890,9 +928,19 @@ export default function App() {
 
     recognition.onstart = () => setIsListening(true);
     recognition.onend = () => setIsListening(false);
-    recognition.onerror = () => setIsListening(false);
+    recognition.onerror = (event) => {
+      setIsListening(false);
+      if (event.error && event.error !== "aborted") {
+        alert(getVoiceRecognitionErrorMessage(event.error));
+      }
+    };
     recognition.onresult = (event) => {
       const text = event.results[0]?.[0]?.transcript || "";
+      if (!text.trim()) {
+        alert("Речь не распознана. Попробуйте ещё раз.");
+        return;
+      }
+
       const parsed = parseVoiceTransaction(text);
 
       setForm((prev) => ({
@@ -911,7 +959,14 @@ export default function App() {
     };
 
     recognitionRef.current = recognition;
-    recognition.start();
+
+    try {
+      recognition.start();
+    } catch (error) {
+      setIsListening(false);
+      console.error("Не удалось запустить голосовой ввод:", error);
+      alert("Не удалось запустить микрофон. Попробуйте обновить страницу.");
+    }
   }
 
   async function handleSubmit(event) {
@@ -1258,6 +1313,32 @@ if (saved) {
                 </button>
               </div>
 
+              <button
+                type="button"
+                onClick={handleVoiceInput}
+                disabled={!voiceInputSupported}
+                className={`mb-4 flex min-h-[48px] w-full touch-manipulation items-center justify-center gap-2 rounded-2xl border px-5 py-3 font-semibold transition active:scale-[0.99] sm:hover:scale-[1.01] ${
+                  !voiceInputSupported
+                    ? "cursor-not-allowed border-white/10 bg-white/5 text-slate-500"
+                    : isListening
+                      ? "border-amber-400/60 bg-amber-500/20 text-amber-100"
+                      : form.type === "expense"
+                        ? "border-red-400/30 bg-red-500/10 text-red-100 hover:bg-red-500/20"
+                        : "border-green-400/30 bg-green-500/10 text-green-100 hover:bg-green-500/20"
+                }`}
+              >
+                {isListening ? "Слушаю..." : "🎤 Голосовой ввод"}
+              </button>
+              {voiceInputHint ? (
+                <p className="mb-4 rounded-2xl border border-amber-400/20 bg-amber-500/10 px-3 py-2 text-xs leading-relaxed text-amber-100 sm:text-sm">
+                  {voiceInputHint}
+                </p>
+              ) : (
+                <p className="mb-4 text-xs leading-relaxed text-slate-400 sm:text-sm">
+                  Скажите, например: «Вика потратила 1500 в магазине на продукты».
+                </p>
+              )}
+
               <Field label="Участник">
                 <select className="input" value={form.memberId} onChange={(e) => setForm({ ...form, memberId: e.target.value })}>
                   {MEMBER_OPTIONS.map((member) => (
@@ -1305,20 +1386,6 @@ if (saved) {
               <Field label="Комментарий">
                 <input className="input" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder="Например: магазин, кружок, поездка" />
               </Field>
-
-              <button
-                type="button"
-                onClick={handleVoiceInput}
-                className={`mt-4 flex min-h-[48px] w-full touch-manipulation items-center justify-center gap-2 rounded-2xl border px-5 py-3 font-semibold transition active:scale-[0.99] sm:hover:scale-[1.01] ${
-                  isListening
-                    ? "border-amber-400/60 bg-amber-500/20 text-amber-100"
-                    : form.type === "expense"
-                      ? "border-red-400/30 bg-red-500/10 text-red-100 hover:bg-red-500/20"
-                      : "border-green-400/30 bg-green-500/10 text-green-100 hover:bg-green-500/20"
-                }`}
-              >
-                {isListening ? "Слушаю..." : "🎤 Голосовой ввод"}
-              </button>
 
               <button
                 type="submit"

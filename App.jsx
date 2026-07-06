@@ -200,6 +200,85 @@ function getDefaultCategory(type) {
   return type === "expense" ? "Еда" : "Зарплата";
 }
 
+const VOICE_EXPENSE_KEYWORDS = ["купила", "купил", "потратила", "потратил", "заплатила", "заплатил", "магазин"];
+const VOICE_INCOME_KEYWORDS = ["зарплата", "получила", "получил", "пришли деньги", "доход"];
+const VOICE_CATEGORY_RULES = [
+  { keywords: ["еда", "продукты", "магазин"], category: "Еда" },
+  { keywords: ["кафе", "ресторан"], category: "Кафе" },
+  { keywords: ["вещи", "одежда"], category: "Вещи" },
+  { keywords: ["развлечения", "кино", "парк"], category: "Развлечения" },
+  { keywords: ["транспорт", "такси", "бензин"], category: "Транспорт" },
+  { keywords: ["дом", "ремонт"], category: "Дом" },
+  { keywords: ["здоровье", "аптека", "врач"], category: "Здоровье" },
+];
+const VOICE_MEMBER_RULES = [
+  { keywords: ["алиса"], memberId: "alisa" },
+  { keywords: ["алина"], memberId: "alina" },
+  { keywords: ["гриша"], memberId: "grisha" },
+  { keywords: ["вика"], memberId: "vika" },
+];
+
+function parseVoiceTransaction(text) {
+  const original = String(text || "").trim();
+  const lower = original.toLowerCase();
+
+  const amountMatch = lower.match(/\d+(?:[.,]\d+)?/);
+  const amount = amountMatch ? amountMatch[0].replace(",", ".") : "";
+
+  const matchedIncome = VOICE_INCOME_KEYWORDS.filter((keyword) => lower.includes(keyword));
+  const matchedExpense = VOICE_EXPENSE_KEYWORDS.filter((keyword) => lower.includes(keyword));
+
+  let type = "expense";
+  if (matchedIncome.length && !matchedExpense.length) {
+    type = "income";
+  } else if (matchedIncome.length && matchedExpense.length) {
+    const incomeIndex = Math.min(...matchedIncome.map((keyword) => lower.indexOf(keyword)));
+    const expenseIndex = Math.min(...matchedExpense.map((keyword) => lower.indexOf(keyword)));
+    type = incomeIndex <= expenseIndex ? "income" : "expense";
+  }
+
+  let category = type === "income" ? "Зарплата" : "Еда";
+  for (const rule of VOICE_CATEGORY_RULES) {
+    if (rule.keywords.some((keyword) => lower.includes(keyword))) {
+      category = rule.category;
+      break;
+    }
+  }
+  if (type === "income" && matchedIncome.includes("зарплата")) {
+    category = "Зарплата";
+  }
+  const validCategories = type === "expense" ? EXPENSE_CATEGORIES : INCOME_CATEGORIES;
+  if (!validCategories.includes(category)) {
+    category = getDefaultCategory(type);
+  }
+
+  let memberId = null;
+  for (const rule of VOICE_MEMBER_RULES) {
+    if (rule.keywords.some((keyword) => lower.includes(keyword))) {
+      memberId = rule.memberId;
+      break;
+    }
+  }
+
+  const keywordsToRemove = [
+    ...VOICE_EXPENSE_KEYWORDS,
+    ...VOICE_INCOME_KEYWORDS,
+    ...VOICE_CATEGORY_RULES.flatMap((rule) => rule.keywords),
+    ...VOICE_MEMBER_RULES.flatMap((rule) => rule.keywords),
+  ].sort((a, b) => b.length - a.length);
+
+  let note = original;
+  if (amountMatch) {
+    note = note.replace(new RegExp(amountMatch[0].replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"), "");
+  }
+  for (const keyword of keywordsToRemove) {
+    note = note.replace(new RegExp(keyword, "gi"), "");
+  }
+  note = note.replace(/\s+/g, " ").trim();
+
+  return { amount, type, category, memberId, note };
+}
+
 function sumAmounts(items, condition) {
   return items.reduce((sum, item) => (condition(item) ? sum + Number(item.amount || 0) : sum), 0);
 }
@@ -376,6 +455,8 @@ export default function App() {
   const mainPanelRef = useRef(null);
   const formPanelRef = useRef(null);
   const amountInputRef = useRef(null);
+  const recognitionRef = useRef(null);
+  const [isListening, setIsListening] = useState(false);
   const isCompact = useMediaQuery("(max-width: 639px)");
   const chartHeight = isCompact ? 240 : 320;
   const pieOnlyHeight = isCompact ? 220 : 260;
@@ -784,6 +865,55 @@ export default function App() {
     setForm((prev) => ({ ...prev, type, category: getDefaultCategory(type), customCategory: "" }));
   }
 
+  useEffect(() => {
+    return () => {
+      recognitionRef.current?.stop();
+    };
+  }, []);
+
+  function handleVoiceInput() {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert("Ваш браузер не поддерживает голосовой ввод");
+      return;
+    }
+
+    if (isListening) {
+      recognitionRef.current?.stop();
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = "ru-RU";
+    recognition.interimResults = false;
+    recognition.continuous = false;
+
+    recognition.onstart = () => setIsListening(true);
+    recognition.onend = () => setIsListening(false);
+    recognition.onerror = () => setIsListening(false);
+    recognition.onresult = (event) => {
+      const text = event.results[0]?.[0]?.transcript || "";
+      const parsed = parseVoiceTransaction(text);
+
+      setForm((prev) => ({
+        ...prev,
+        type: parsed.type,
+        memberId: parsed.memberId || prev.memberId,
+        category: parsed.category,
+        customCategory: parsed.category === "Своя статья" ? prev.customCategory : "",
+        amount: parsed.amount || prev.amount,
+        note: parsed.note,
+      }));
+
+      requestAnimationFrame(() => {
+        amountInputRef.current?.focus({ preventScroll: true });
+      });
+    };
+
+    recognitionRef.current = recognition;
+    recognition.start();
+  }
+
   async function handleSubmit(event) {
     event.preventDefault();
 
@@ -1175,6 +1305,20 @@ if (saved) {
               <Field label="Комментарий">
                 <input className="input" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder="Например: магазин, кружок, поездка" />
               </Field>
+
+              <button
+                type="button"
+                onClick={handleVoiceInput}
+                className={`mt-4 flex min-h-[48px] w-full touch-manipulation items-center justify-center gap-2 rounded-2xl border px-5 py-3 font-semibold transition active:scale-[0.99] sm:hover:scale-[1.01] ${
+                  isListening
+                    ? "border-amber-400/60 bg-amber-500/20 text-amber-100"
+                    : form.type === "expense"
+                      ? "border-red-400/30 bg-red-500/10 text-red-100 hover:bg-red-500/20"
+                      : "border-green-400/30 bg-green-500/10 text-green-100 hover:bg-green-500/20"
+                }`}
+              >
+                {isListening ? "Слушаю..." : "🎤 Голосовой ввод"}
+              </button>
 
               <button
                 type="submit"

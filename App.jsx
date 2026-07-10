@@ -422,7 +422,7 @@ function groupTransactionsByMonth(items) {
     .sort((a, b) => b.key.localeCompare(a.key));
 }
 
-function buildMonthSummary(key, monthTransactions) {
+function buildMonthSummary(key, monthTransactions, options = {}) {
   const income = sumAmounts(monthTransactions, (item) => item.type === "income");
   const expense = sumAmounts(monthTransactions, (item) => item.type === "expense");
   const balance = income - expense;
@@ -452,7 +452,7 @@ function buildMonthSummary(key, monthTransactions) {
   return {
     monthKey: key,
     title: formatMonthGroupTitle(key),
-    closedAt: today(),
+    closedAt: options.closedAt ?? today(),
     income,
     expense,
     balance,
@@ -462,6 +462,32 @@ function buildMonthSummary(key, monthTransactions) {
     byCategory,
     byMember,
     transactions: monthTransactions,
+  };
+}
+
+function rebuildArchivedMonthSummary(existingSummary, monthTransactions) {
+  return buildMonthSummary(existingSummary.monthKey, monthTransactions, {
+    closedAt: existingSummary.closedAt,
+  });
+}
+
+function updateArchivedMonth(monthSummaries, monthKey, updateTransactions) {
+  return monthSummaries
+    .map((summary) => {
+      if (summary.monthKey !== monthKey) return summary;
+      const currentTransactions = Array.isArray(summary.transactions) ? summary.transactions : [];
+      const nextTransactions = updateTransactions(currentTransactions);
+      return rebuildArchivedMonthSummary(summary, nextTransactions);
+    })
+    .sort((a, b) => b.monthKey.localeCompare(a.monthKey));
+}
+
+function getMonthDateBounds(monthKeyValue) {
+  const [year, month] = String(monthKeyValue || "").split("-");
+  const lastDay = new Date(Number(year), Number(month), 0).getDate();
+  return {
+    min: `${year}-${month}-01`,
+    max: `${year}-${month}-${String(lastDay).padStart(2, "0")}`,
   };
 }
 
@@ -539,6 +565,7 @@ export default function App() {
   const [filterMonth, setFilterMonth] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [editingId, setEditingId] = useState(null);
+  const [editingArchiveMonthKey, setEditingArchiveMonthKey] = useState(null);
   const [activeTab, setActiveTab] = useState("dashboard");
   const [monthToClose, setMonthToClose] = useState("");
   const [expandedArchiveKey, setExpandedArchiveKey] = useState(null);
@@ -837,7 +864,11 @@ export default function App() {
       note: "",
     });
     setEditingId(null);
+    setEditingArchiveMonthKey(null);
   }
+
+  const archiveDateBounds = editingArchiveMonthKey ? getMonthDateBounds(editingArchiveMonthKey) : null;
+  const editingArchiveTitle = editingArchiveMonthKey ? formatMonthGroupTitle(editingArchiveMonthKey) : "";
 
   function handleTypeChange(type) {
     setForm((prev) => ({ ...prev, type, category: getDefaultCategory(type), customCategory: "" }));
@@ -934,6 +965,34 @@ export default function App() {
       note: form.note.trim(),
     };
 
+    if (editingArchiveMonthKey) {
+      if (monthKey(prepared.date) !== editingArchiveMonthKey) {
+        alert(`Дата операции должна оставаться в закрытом месяце: ${editingArchiveTitle}.`);
+        return;
+      }
+
+      const nextSummaries = updateArchivedMonth(monthSummaries, editingArchiveMonthKey, (currentTransactions) => {
+        if (editingId) {
+          return currentTransactions.map((item) => (item.id === editingId ? prepared : item));
+        }
+        return [prepared, ...currentTransactions];
+      });
+
+      setMonthSummaries(nextSummaries);
+      monthSummariesRef.current = nextSummaries;
+
+      const savedMonthKey = editingArchiveMonthKey;
+      const saved = await saveCurrentBudgetToCloud(transactionsRef.current, limitsRef.current, nextSummaries);
+      if (saved) {
+        resetForm(form.type);
+        setExpandedArchiveKey(savedMonthKey);
+        setActiveTab("summaries");
+      } else {
+        alert("Изменения видны на экране, но не сохранились в облако. Не обновляйте страницу.");
+      }
+      return;
+    }
+
     let nextTransactions;
 
 if (editingId) {
@@ -957,6 +1016,7 @@ if (saved) {
   }
 
   function handleEdit(item) {
+    setEditingArchiveMonthKey(null);
     setEditingId(item.id);
     setForm({
       type: item.type,
@@ -968,6 +1028,47 @@ if (saved) {
       note: item.note || "",
     });
     window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function handleEditArchive(monthKeyValue, item) {
+    setEditingArchiveMonthKey(monthKeyValue);
+    setEditingId(item.id);
+    setExpandedArchiveKey(monthKeyValue);
+    setActiveTab("summaries");
+    setForm({
+      type: item.type,
+      memberId: item.memberId,
+      category: item.category,
+      customCategory: item.customCategory || "",
+      amount: String(item.amount),
+      date: item.date,
+      note: item.note || "",
+    });
+
+    requestAnimationFrame(() => {
+      formPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      amountInputRef.current?.focus({ preventScroll: true });
+    });
+  }
+
+  async function handleDeleteArchive(monthKeyValue, id) {
+    if (!window.confirm("Удалить операцию из архива?")) return;
+
+    const nextSummaries = updateArchivedMonth(monthSummaries, monthKeyValue, (currentTransactions) =>
+      currentTransactions.filter((item) => item.id !== id)
+    );
+
+    setMonthSummaries(nextSummaries);
+    monthSummariesRef.current = nextSummaries;
+
+    if (editingId === id && editingArchiveMonthKey === monthKeyValue) {
+      resetForm();
+    }
+
+    const saved = await saveCurrentBudgetToCloud(transactionsRef.current, limitsRef.current, nextSummaries);
+    if (!saved) {
+      alert("Операция удалена на экране, но не сохранилась в облако. Не обновляйте страницу.");
+    }
   }
 
   async function handleDelete(id) {
@@ -1219,15 +1320,22 @@ if (saved) {
 
         <main ref={mainPanelRef} className="grid gap-4 scroll-mt-4 sm:gap-6 lg:grid-cols-[minmax(0,430px)_1fr]">
           <section ref={formPanelRef} className="scroll-mt-4 rounded-2xl border border-white/10 bg-white/5 p-4 shadow-xl sm:rounded-3xl sm:p-5">
+            {editingArchiveMonthKey && (
+              <div className="mb-4 rounded-2xl border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
+                Редактирование архива: {editingArchiveTitle}
+              </div>
+            )}
             <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
               <h2 className="text-xl font-bold sm:text-2xl">
-                {editingId
+                {editingArchiveMonthKey
+                  ? `Редактировать в архиве — ${editingArchiveTitle}`
+                  : editingId
                   ? "Редактировать операцию"
                   : form.memberId !== "all"
                     ? `Добавить операцию — ${selectedMemberPreview.name}`
                     : "Добавить операцию"}
               </h2>
-              {editingId && (
+              {(editingId || editingArchiveMonthKey) && (
                 <button type="button" onClick={() => resetForm()} className="inline-flex items-center gap-2 rounded-xl bg-white/10 px-3 py-2 text-sm hover:bg-white/15">
                   <X size={16} /> Отмена
                 </button>
@@ -1319,7 +1427,14 @@ if (saved) {
               </Field>
 
               <Field label="Дата">
-                <input className="input" type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
+                <input
+                  className="input"
+                  type="date"
+                  value={form.date}
+                  min={archiveDateBounds?.min}
+                  max={archiveDateBounds?.max}
+                  onChange={(e) => setForm({ ...form, date: e.target.value })}
+                />
               </Field>
 
               <Field label="Комментарий">
@@ -1330,8 +1445,8 @@ if (saved) {
                 type="submit"
                 className={`mt-4 flex min-h-[48px] w-full touch-manipulation items-center justify-center gap-2 rounded-2xl px-5 py-4 font-bold text-white shadow-lg transition active:scale-[0.99] sm:hover:scale-[1.01] ${form.type === "expense" ? "bg-red-500 hover:bg-red-400" : "bg-green-500 hover:bg-green-400"}`}
               >
-                {editingId ? <Save size={18} /> : <Plus size={18} />}
-                {editingId ? "Сохранить изменения" : "Добавить"}
+                {editingArchiveMonthKey ? <Save size={18} /> : editingId ? <Save size={18} /> : <Plus size={18} />}
+                {editingArchiveMonthKey ? "Сохранить в архиве" : editingId ? "Сохранить изменения" : "Добавить"}
               </button>
 
               <div className="mt-4 grid grid-cols-2 gap-2">
@@ -1696,6 +1811,9 @@ if (saved) {
                           onToggle={() =>
                             setExpandedArchiveKey((prev) => (prev === summary.monthKey ? null : summary.monthKey))
                           }
+                          onEdit={(item) => handleEditArchive(summary.monthKey, item)}
+                          onDelete={(id) => handleDeleteArchive(summary.monthKey, id)}
+                          editingId={editingArchiveMonthKey === summary.monthKey ? editingId : null}
                         />
                       ))}
                     </div>
@@ -2097,7 +2215,7 @@ function BudgetChartsPanel({
   );
 }
 
-function MonthArchiveCard({ summary, expanded, onToggle }) {
+function MonthArchiveCard({ summary, expanded, onToggle, onEdit, onDelete, editingId = null }) {
   const [selectedCategory, setSelectedCategory] = useState(null);
   const archiveTransactions = Array.isArray(summary.transactions) ? summary.transactions : [];
   const archiveExpensesByCategory = useMemo(
@@ -2171,7 +2289,8 @@ function MonthArchiveCard({ summary, expanded, onToggle }) {
             categoryBarTitle={`Расходы по статьям (${periodLabel})`}
             trendTitle={`Динамика по дням (${periodLabel})`}
             trendEmptyText="Нет операций для построения динамики."
-            readOnly
+            onEdit={onEdit}
+            onDelete={onDelete}
           />
 
           <div>
@@ -2230,7 +2349,7 @@ function MonthArchiveCard({ summary, expanded, onToggle }) {
               )}
             </div>
             <div className="overflow-x-auto rounded-xl border border-white/10">
-            <table className="w-full min-w-[760px] border-collapse text-left text-sm">
+            <table className="w-full min-w-[860px] border-collapse text-left text-sm">
               <thead className="bg-slate-950 text-slate-400">
                 <tr>
                   <th className="p-2">Дата</th>
@@ -2238,12 +2357,16 @@ function MonthArchiveCard({ summary, expanded, onToggle }) {
                   <th className="p-2">Статья</th>
                   <th className="p-2">Комментарий</th>
                   <th className="p-2 text-right">Сумма</th>
+                  <th className="p-2 text-right">Действия</th>
                 </tr>
               </thead>
               <tbody>
                 {visibleTransactions.length ? (
                   visibleTransactions.map((item) => (
-                    <tr key={item.id} className="border-t border-white/10">
+                    <tr
+                      key={item.id}
+                      className={`border-t border-white/10 ${editingId === item.id ? "bg-amber-500/10" : ""}`}
+                    >
                       <td className="p-2 text-slate-300">{formatDisplayDate(item.date)}</td>
                       <td className="p-2">{getMemberName(item.memberId)}</td>
                       <td className="p-2">{getCategoryLabel(item)}</td>
@@ -2252,11 +2375,31 @@ function MonthArchiveCard({ summary, expanded, onToggle }) {
                         {item.type === "income" ? "+" : "-"}
                         {currency.format(item.amount)}
                       </td>
+                      <td className="p-2">
+                        <div className="flex justify-end gap-1">
+                          <button
+                            type="button"
+                            onClick={() => onEdit(item)}
+                            className="rounded-lg p-2 text-slate-400 hover:bg-white/10 hover:text-white"
+                            title="Редактировать"
+                          >
+                            <Pencil size={16} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onDelete(item.id)}
+                            className="rounded-lg p-2 text-slate-400 hover:bg-red-500/10 hover:text-red-400"
+                            title="Удалить"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </td>
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={5} className="p-4 text-center text-slate-400">
+                    <td colSpan={6} className="p-4 text-center text-slate-400">
                       {selectedCategory ? "Нет операций по этой статье." : "Нет операций в архиве."}
                     </td>
                   </tr>

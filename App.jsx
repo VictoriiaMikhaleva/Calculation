@@ -2098,6 +2098,7 @@ function BudgetChartsPanel({
 }
 
 function MonthArchiveCard({ summary, expanded, onToggle }) {
+  const [selectedCategory, setSelectedCategory] = useState(null);
   const archiveTransactions = Array.isArray(summary.transactions) ? summary.transactions : [];
   const archiveExpensesByCategory = useMemo(
     () => (summary.byCategory?.length ? summary.byCategory : buildExpensesByCategory(archiveTransactions)),
@@ -2105,6 +2106,21 @@ function MonthArchiveCard({ summary, expanded, onToggle }) {
   );
   const archiveTrendData = useMemo(() => buildDailyTrendData(archiveTransactions), [archiveTransactions]);
   const periodLabel = monthLabel(summary.monthKey);
+
+  useEffect(() => {
+    if (!expanded) setSelectedCategory(null);
+  }, [expanded]);
+
+  const visibleTransactions = useMemo(() => {
+    const sorted = [...archiveTransactions].sort((a, b) => new Date(b.date) - new Date(a.date));
+    if (!selectedCategory) return sorted;
+    return sorted.filter((item) => item.type === "expense" && getCategoryLabel(item) === selectedCategory);
+  }, [archiveTransactions, selectedCategory]);
+
+  const selectedCategoryTotal = useMemo(
+    () => sumAmounts(visibleTransactions, () => true),
+    [visibleTransactions]
+  );
 
   return (
     <div className="rounded-2xl border border-white/10 bg-slate-900/70 p-4">
@@ -2172,47 +2188,82 @@ function MonthArchiveCard({ summary, expanded, onToggle }) {
             </div>
           </div>
 
-          {summary.byCategory?.length > 0 && (
+          {archiveExpensesByCategory.length > 0 && (
             <div>
               <p className="mb-2 text-sm font-semibold text-slate-300">По статьям расходов</p>
-              <div className="space-y-2">
-                {summary.byCategory.slice(0, 8).map((row) => (
-                  <div key={row.name} className="flex items-center justify-between gap-2 text-sm">
-                    <span className="text-slate-300">{row.name}</span>
+              <p className="mb-2 text-xs text-slate-500">Нажмите на статью, чтобы увидеть операции ниже</p>
+              <div className="space-y-1">
+                {archiveExpensesByCategory.map((row) => (
+                  <button
+                    key={row.name}
+                    type="button"
+                    onClick={() => setSelectedCategory((prev) => (prev === row.name ? null : row.name))}
+                    className={`flex w-full items-center justify-between gap-2 rounded-xl px-3 py-2 text-left text-sm transition ${
+                      selectedCategory === row.name
+                        ? "bg-sky-500/20 text-sky-100"
+                        : "text-slate-300 hover:bg-white/5"
+                    }`}
+                  >
+                    <span>{row.name}</span>
                     <span className="font-semibold text-red-400">{currency.format(row.value)}</span>
-                  </div>
+                  </button>
                 ))}
               </div>
             </div>
           )}
 
-          <div className="overflow-x-auto rounded-xl border border-white/10">
-            <table className="w-full min-w-[640px] border-collapse text-left text-sm">
+          <div>
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm font-semibold text-slate-300">
+                {selectedCategory
+                  ? `Операции по статье «${selectedCategory}» · ${currency.format(selectedCategoryTotal)}`
+                  : "Все операции"}
+              </p>
+              {selectedCategory && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedCategory(null)}
+                  className="rounded-xl bg-white/10 px-3 py-1.5 text-xs text-slate-300 hover:bg-white/15 hover:text-white"
+                >
+                  Показать все
+                </button>
+              )}
+            </div>
+            <div className="overflow-x-auto rounded-xl border border-white/10">
+            <table className="w-full min-w-[760px] border-collapse text-left text-sm">
               <thead className="bg-slate-950 text-slate-400">
                 <tr>
                   <th className="p-2">Дата</th>
                   <th className="p-2">Участник</th>
                   <th className="p-2">Статья</th>
+                  <th className="p-2">Комментарий</th>
                   <th className="p-2 text-right">Сумма</th>
                 </tr>
               </thead>
               <tbody>
-                {summary.transactions
-                  .slice()
-                  .sort((a, b) => new Date(b.date) - new Date(a.date))
-                  .map((item) => (
+                {visibleTransactions.length ? (
+                  visibleTransactions.map((item) => (
                     <tr key={item.id} className="border-t border-white/10">
                       <td className="p-2 text-slate-300">{formatDisplayDate(item.date)}</td>
                       <td className="p-2">{getMemberName(item.memberId)}</td>
                       <td className="p-2">{getCategoryLabel(item)}</td>
+                      <td className="max-w-[220px] p-2 text-slate-400">{item.note || "—"}</td>
                       <td className={`p-2 text-right font-semibold ${item.type === "income" ? "text-green-400" : "text-red-400"}`}>
                         {item.type === "income" ? "+" : "-"}
                         {currency.format(item.amount)}
                       </td>
                     </tr>
-                  ))}
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={5} className="p-4 text-center text-slate-400">
+                      {selectedCategory ? "Нет операций по этой статье." : "Нет операций в архиве."}
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
+            </div>
           </div>
         </div>
       )}
